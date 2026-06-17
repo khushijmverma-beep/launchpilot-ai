@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f8fb;
+  --foreground: #172033;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+button,
+a,
+input,
+textarea {
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease, box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.shell-bg {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(116, 165, 255, 0.22), transparent 28rem),
+    radial-gradient(circle at 90% 15%, rgba(176, 143, 255, 0.18), transparent 24rem),
+    linear-gradient(180deg, #fbfcff 0%, #eef3fb 100%);
+}
+
+.glass {
+  border: 1px solid rgba(116, 131, 163, 0.18);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 20px 60px rgba(42, 55, 90, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.orb {
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.18) 28%),
+    radial-gradient(circle at 70% 68%, rgba(125, 162, 255, 0.85), transparent 38%),
+    linear-gradient(135deg, rgba(107, 132, 255, 0.9), rgba(219, 226, 255, 0.62));
+  box-shadow: 0 22px 80px rgba(87, 117, 220, 0.33), inset 0 0 42px rgba(255, 255, 255, 0.55);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
