@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f8fb;
-  --foreground: #172033;
+  --background: #f8f6ef;
+  --foreground: #26231d;
 }
 
 @theme inline {
@@ -28,26 +28,42 @@ textarea {
 
 .shell-bg {
   background:
-    radial-gradient(circle at 20% 10%, rgba(116, 165, 255, 0.22), transparent 28rem),
-    radial-gradient(circle at 90% 15%, rgba(176, 143, 255, 0.18), transparent 24rem),
-    linear-gradient(180deg, #fbfcff 0%, #eef3fb 100%);
+    linear-gradient(rgba(41, 37, 29, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(41, 37, 29, 0.045) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(222, 207, 255, 0.42), transparent 18rem),
+    radial-gradient(circle at 85% 28%, rgba(255, 190, 151, 0.2), transparent 20rem),
+    linear-gradient(180deg, #fbfaf6 0%, #f3f0e8 100%);
+  background-size: 74px 74px, 74px 74px, auto, auto, auto;
 }
 
 .glass {
-  border: 1px solid rgba(116, 131, 163, 0.18);
-  background: rgba(255, 255, 255, 0.76);
-  box-shadow: 0 20px 60px rgba(42, 55, 90, 0.08);
+  border: 1px solid rgba(66, 58, 45, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 22px 70px rgba(59, 51, 38, 0.11);
   backdrop-filter: blur(18px);
 }
 
 .orb {
   background:
-    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.18) 28%),
-    radial-gradient(circle at 70% 68%, rgba(125, 162, 255, 0.85), transparent 38%),
-    linear-gradient(135deg, rgba(107, 132, 255, 0.9), rgba(219, 226, 255, 0.62));
-  box-shadow: 0 22px 80px rgba(87, 117, 220, 0.33), inset 0 0 42px rgba(255, 255, 255, 0.55);
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.16) 28%),
+    radial-gradient(circle at 74% 72%, rgba(143, 202, 160, 0.74), transparent 38%),
+    conic-gradient(from 140deg, #b8dcff, #f3d3a7, #c7b8ff, #c8f0d3, #b8dcff);
+  box-shadow: 0 28px 90px rgba(93, 83, 63, 0.22), inset 0 0 48px rgba(255, 255, 255, 0.62);
 }
 
 .text-balance {
   text-wrap: balance;
+}
+
+.dashed-path {
+  background-image: linear-gradient(to bottom, rgba(74, 70, 61, 0.15) 50%, transparent 0%);
+  background-position: left top;
+  background-repeat: repeat-y;
+  background-size: 2px 28px;
+}
+
+.premium-card {
+  border: 1px solid rgba(66, 58, 45, 0.12);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 14px 40px rgba(66, 58, 45, 0.08);
 }

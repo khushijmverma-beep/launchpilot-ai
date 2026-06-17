@@ -9,6 +9,6 @@ describe("LaunchBriefView", () => {
     render(<LaunchBriefView brief={generateLaunchBrief(demoProfile)} />);
     expect(screen.getByText("Launch Brief Workspace")).toBeTruthy();
     expect(screen.getByText("Context Copilot")).toBeTruthy();
-    expect(screen.getByText("Founder Reality Check")).toBeTruthy();
+    expect(screen.getAllByText("Founder Reality Check").length).toBeGreaterThan(0);
   });
 });

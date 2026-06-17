@@ -27,7 +27,19 @@ export default function DashboardPage() {
   return (
     <main className="shell-bg min-h-screen">
       <Nav />
-      <section className="mx-auto max-w-7xl px-5 pb-10">{brief ? <LaunchBriefView brief={brief} /> : null}</section>
+      <section className="mx-auto max-w-7xl px-5 pb-10">
+        {brief ? (
+          <LaunchBriefView brief={brief} />
+        ) : (
+          <div className="glass rounded-[28px] p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Launch Brief Workspace</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-stone-950">Preparing your founder workspace...</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600">
+              Loading saved context, agent outputs, sources, roadmap, and responsible AI notes.
+            </p>
+          </div>
+        )}
+      </section>
     </main>
   );
 }
