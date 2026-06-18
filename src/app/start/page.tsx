@@ -35,7 +35,7 @@ export default function StartPage() {
             className="orb relative flex h-56 w-56 items-center justify-center rounded-full hover:scale-[1.02]"
             animate={{ scale: [1, 1.035, 1], rotate: [0, 1.5, 0] }}
             transition={{ duration: 3, repeat: Infinity }}
-            onClick={() => router.push("/interview?mode=voice")}
+            onClick={() => router.push("/interview-voice")}
           >
             <Mic className="h-14 w-14 text-white drop-shadow" />
           </motion.button>
@@ -48,7 +48,7 @@ export default function StartPage() {
         <div className="mt-7 flex flex-wrap justify-center gap-3">
           <button
             className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-stone-300/70"
-            onClick={() => router.push("/interview?mode=chat")}
+            onClick={() => router.push("/interview-chat")}
           >
             <MessageCircle className="h-4 w-4" /> I prefer to chat
           </button>
