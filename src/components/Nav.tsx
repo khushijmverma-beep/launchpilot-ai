@@ -4,8 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { NavUserMenu } from "@/components/profile/NavUserMenu";
-import { getStoredUser } from "@/lib/auth-session";
-import { useLayoutEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const SECTION_LINKS = [
   { label: "About", hash: "about" },
@@ -16,25 +15,7 @@ const SECTION_LINKS = [
 export function Nav() {
   const router = useRouter();
   const pathname = usePathname();
-  const [signedIn, setSignedIn] = useState(false);
-  const [ready, setReady] = useState(false);
-
-  useLayoutEffect(() => {
-    const sync = () => {
-      setSignedIn(!!getStoredUser());
-      setReady(true);
-    };
-
-    sync();
-    window.addEventListener("storage", sync);
-    window.addEventListener("launchpilot-auth-change", sync);
-    window.addEventListener("launchpilot-profile-change", sync);
-    return () => {
-      window.removeEventListener("storage", sync);
-      window.removeEventListener("launchpilot-auth-change", sync);
-      window.removeEventListener("launchpilot-profile-change", sync);
-    };
-  }, []);
+  const { user, loading } = useAuth();
 
   function handleSectionNav(hash: string) {
     if (pathname === "/") {
@@ -82,9 +63,9 @@ export function Nav() {
             Privacy
           </Link>
         </div>
-        {ready && signedIn ? (
+        {!loading && user ? (
           <NavUserMenu />
-        ) : ready ? (
+        ) : !loading ? (
           <Link className="btn-secondary ml-2 px-4 py-2 text-xs" href="/login">
             Sign in
           </Link>

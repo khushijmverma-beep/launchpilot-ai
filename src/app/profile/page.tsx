@@ -3,12 +3,8 @@
 import { Nav } from "@/components/Nav";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { UserAvatar } from "@/components/profile/UserAvatar";
-import {
-  clearStoredUser,
-  getStoredUser,
-  getUserEmail,
-  getUserId,
-} from "@/lib/auth-session";
+import { useAuth } from "@/contexts/AuthContext";
+import { getUserEmail } from "@/lib/auth-session";
 import { getUserProjectSummary, listRecentProjects } from "@/lib/projects/firestore";
 import { getUserProfile, saveUserProfile } from "@/lib/users/firestore";
 import { OPEN_EDIT_PROFILE_EVENT } from "@/lib/users/profileEvents";
@@ -28,6 +24,7 @@ const emptyProfile: FounderUserProfile = {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { displayName, avatarUrl, refresh: refreshIdentity } = useUserProfile();
   const [ready, setReady] = useState(false);
   const [userEmail, setUserEmail] = useState("");
@@ -54,19 +51,15 @@ export default function ProfilePage() {
 
   useEffect(() => {
     async function load() {
-      const user = getStoredUser();
+      if (authLoading) return;
+
       if (!user) {
         router.replace("/login");
         return;
       }
 
-      const userId = getUserId(user);
-      if (!userId) {
-        setError("Could not resolve user id");
-        setReady(true);
-        return;
-      }
-
+      setReady(false);
+      const userId = user.uid;
       const email = getUserEmail(user);
       setUserEmail(email);
 
@@ -92,7 +85,7 @@ export default function ProfilePage() {
     }
 
     void load();
-  }, [router]);
+  }, [router, user, authLoading]);
 
   function updateField(key: keyof Pick<FounderUserProfile, "background" | "skills" | "goals">, value: string) {
     setProfile((current) => ({ ...current, [key]: value }));
@@ -100,21 +93,19 @@ export default function ProfilePage() {
   }
 
   async function handleSave() {
-    const user = getStoredUser();
-    const userId = getUserId(user);
-    if (!userId) return;
+    if (!user) return;
 
     setSaving(true);
     setError(null);
 
     try {
-      const savedDoc = await saveUserProfile(userId, {
+      const savedDoc = await saveUserProfile(user.uid, {
         background: profile.background,
         skills: profile.skills,
         goals: profile.goals,
-        email: getUserEmail(user!),
+        email: getUserEmail(user),
         displayName: displayName,
-        school: inferSchoolFromEmail(getUserEmail(user!)) ?? undefined,
+        school: inferSchoolFromEmail(getUserEmail(user)) ?? undefined,
       });
       setProfile(savedDoc);
       setSaved(true);
@@ -130,13 +121,12 @@ export default function ProfilePage() {
     setSaved(false);
   }
 
-  function handleSignOut() {
-    clearStoredUser();
-    window.dispatchEvent(new Event("launchpilot-auth-change"));
+  async function handleSignOut() {
+    await signOut();
     router.push("/login");
   }
 
-  if (!ready) {
+  if (!ready || authLoading) {
     return (
       <main className="shell-bg min-h-screen">
         <Nav />

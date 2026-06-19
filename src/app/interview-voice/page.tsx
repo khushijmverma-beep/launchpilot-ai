@@ -22,12 +22,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useRef, useState, Suspense } from "react";
 import { getProject } from "@/lib/projects/firestore";
-import { loadInterviewPrefill, mergeWithInterviewPrefill } from "@/lib/users/prefill";
+import { loadInterviewPrefill } from "@/lib/users/prefill";
+import { useAuth } from "@/contexts/AuthContext";
 import type { EvidenceScore } from "@/lib/intake/schema";
 
 function InterviewVoicePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
   const projectId = searchParams.get("projectId") ?? undefined;
   const [orbState, setOrbState] = useState<OrbState>("idle");
   const [isActive, setIsActive] = useState(false);
@@ -68,16 +70,16 @@ function InterviewVoicePageInner() {
   }, [projectId]);
 
   useEffect(() => {
-    if (projectId) return;
+    if (projectId || authLoading) return;
 
     async function loadPrefill() {
-      const prefill = await loadInterviewPrefill();
+      const prefill = await loadInterviewPrefill(user?.uid);
       collectedFieldsRef.current = prefill;
       setCollectedFields(prefill);
     }
 
     void loadPrefill();
-  }, [projectId]);
+  }, [projectId, authLoading, user?.uid]);
 
   const endConversation = () => {
     sessionAbortedRef.current = true;

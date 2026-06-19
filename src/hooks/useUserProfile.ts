@@ -1,35 +1,40 @@
 "use client";
 
-import { getCurrentUserId, getStoredUser, getUserEmail, getUserLabel } from "@/lib/auth-session";
+import { getUserEmail, getUserLabel } from "@/lib/auth-session";
 import { getUserProfile } from "@/lib/users/firestore";
 import { PROFILE_CHANGE_EVENT } from "@/lib/users/profileEvents";
 import type { FounderUserProfile } from "@/lib/users/types";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCallback, useEffect, useState } from "react";
 
 export function useUserProfile() {
+  const { user, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState<FounderUserProfile | null>(null);
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
-    const userId = getCurrentUserId();
-    if (!userId) {
+    if (!user) {
       setProfile(null);
       setReady(true);
       return;
     }
 
     try {
-      setProfile(await getUserProfile(userId));
+      setProfile(await getUserProfile(user.uid));
     } catch {
       setProfile(null);
     } finally {
       setReady(true);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    if (authLoading) return;
+    setReady(false);
     void refresh();
+  }, [authLoading, refresh]);
 
+  useEffect(() => {
     function onProfileChange(event: Event) {
       const detail = (event as CustomEvent<Partial<FounderUserProfile>>).detail;
       if (detail) {
@@ -42,17 +47,17 @@ export function useUserProfile() {
     return () => window.removeEventListener(PROFILE_CHANGE_EVENT, onProfileChange);
   }, [refresh]);
 
-  const user = getStoredUser();
   const fallbackName = user ? getUserLabel(user) : "Founder";
   const displayName = profile?.displayName?.trim() || fallbackName;
   const email = user ? getUserEmail(user) : "";
 
   return {
     profile,
-    ready,
+    ready: ready && !authLoading,
     refresh,
     displayName,
-    avatarUrl: profile?.avatarUrl ?? null,
+    avatarUrl: profile?.avatarUrl ?? user?.photoURL ?? null,
     email,
+    user,
   };
 }

@@ -1,25 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { getStoredUser } from "@/lib/auth-session";
-import { useLayoutEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function StartBuildingLink() {
-  const [href, setHref] = useState("/login");
+  const { user, loading } = useAuth();
+  const href = user ? "/start" : "/login";
 
-  useLayoutEffect(() => {
-    const sync = () => {
-      setHref(getStoredUser() ? "/start" : "/login");
-    };
-
-    sync();
-    window.addEventListener("launchpilot-auth-change", sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener("launchpilot-auth-change", sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
+  if (loading) {
+    return (
+      <span className="btn-primary mt-10 opacity-0" aria-hidden>
+        Start Building
+      </span>
+    );
+  }
 
   return (
     <Link href={href} className="btn-primary mt-10">

@@ -19,11 +19,13 @@ import { useSearchParams } from "next/navigation";
 import { getProject } from "@/lib/projects/firestore";
 import { playClickSound } from "@/lib/sounds/click";
 import { mergeWithInterviewPrefill } from "@/lib/users/prefill";
+import { useAuth } from "@/contexts/AuthContext";
 
 type ChatMessage = { role: "assistant" | "user"; content: string; status?: string };
 
 function InterviewChatPageInner() {
   const searchParams = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
   const projectId = searchParams.get("projectId") ?? undefined;
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -37,7 +39,7 @@ function InterviewChatPageInner() {
   const interviewCompleteRef = useRef(false);
 
   useEffect(() => {
-    if (bootstrapRef.current) return;
+    if (authLoading || bootstrapRef.current) return;
     bootstrapRef.current = true;
 
     async function bootstrap() {
@@ -56,7 +58,7 @@ function InterviewChatPageInner() {
         playClickSound();
         setMessages([{ role: "assistant", content: turn.message }]);
         setConversation([{ role: "assistant", content: turn.message }]);
-        setCollectedFields(await mergeWithInterviewPrefill(turn.collectedFields));
+        setCollectedFields(await mergeWithInterviewPrefill(turn.collectedFields, user?.uid));
       } catch (error) {
         setMessages([
           {
@@ -73,7 +75,7 @@ function InterviewChatPageInner() {
     }
 
     void bootstrap();
-  }, [projectId]);
+  }, [projectId, authLoading, user?.uid]);
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing || isBootstrapping) return;

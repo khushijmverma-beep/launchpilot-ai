@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { UserAvatar } from "@/components/profile/UserAvatar";
-import { clearStoredUser } from "@/lib/auth-session";
+import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useEffect, useRef, useState } from "react";
 
 export function NavUserMenu() {
   const router = useRouter();
+  const { signOut } = useAuth();
   const { displayName, avatarUrl } = useUserProfile();
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -28,10 +29,9 @@ export function NavUserMenu() {
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  function handleSignOut() {
+  async function handleSignOut() {
     setOpen(false);
-    clearStoredUser();
-    window.dispatchEvent(new Event("launchpilot-auth-change"));
+    await signOut();
     router.push("/login");
   }
 

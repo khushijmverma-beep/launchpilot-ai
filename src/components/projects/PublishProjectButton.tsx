@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { buildProjectFromInterview, shouldRunResearchEvaluation } from "@/lib/projects/publish";
 import { createProject, getProject, updateProject } from "@/lib/projects/firestore";
-import { getCurrentUserId } from "@/lib/auth-session";
+import { useAuth } from "@/contexts/AuthContext";
 import { buildIntakeFromFields, type CollectedFields } from "@/lib/interview/aiInterview";
 import { runResearchEvaluation } from "@/lib/research/researchAgent";
 import type { EvidenceScore } from "@/lib/intake/schema";
@@ -32,6 +32,7 @@ export function PublishProjectButton({
   label = "Publish project",
 }: PublishProjectButtonProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +79,7 @@ export function PublishProjectButton({
         existing
       );
 
-      const userId = getCurrentUserId();
+      const userId = user?.uid;
       const document = userId ? { ...payload, userId } : payload;
 
       const id = projectId ?? (await createProject(document));

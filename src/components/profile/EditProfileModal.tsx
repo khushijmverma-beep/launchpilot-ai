@@ -3,13 +3,8 @@
 import { ModalPortal } from "@/components/ModalPortal";
 import { UserAvatar } from "@/components/profile/UserAvatar";
 import { AvatarCropModal } from "@/components/profile/AvatarCropModal";
-import {
-  getCurrentUserId,
-  getStoredUser,
-  getUserEmail,
-  getUserLabel,
-  updateStoredUserName,
-} from "@/lib/auth-session";
+import { useAuth } from "@/contexts/AuthContext";
+import { getUserEmail, getUserLabel, userHasPasswordProvider } from "@/lib/auth-session";
 import { saveUserIdentity } from "@/lib/users/firestore";
 import { dispatchProfileChange } from "@/lib/users/profileEvents";
 import { useEffect, useRef, useState } from "react";
@@ -29,9 +24,13 @@ export function EditProfileModal({
   initialAvatarUrl,
   onSaved,
 }: EditProfileModalProps) {
+  const { user, changePassword } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [displayName, setDisplayName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -39,11 +38,13 @@ export function EditProfileModal({
 
   useEffect(() => {
     if (!open) return;
-    const user = getStoredUser();
     setDisplayName(initialDisplayName?.trim() || (user ? getUserLabel(user) : "Founder"));
     setAvatarUrl(initialAvatarUrl ?? null);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
     setError(null);
-  }, [open, initialDisplayName, initialAvatarUrl]);
+  }, [open, initialDisplayName, initialAvatarUrl, user]);
 
   useEffect(() => {
     if (!open) return;
@@ -81,9 +82,7 @@ export function EditProfileModal({
   }
 
   async function handleSave() {
-    const userId = getCurrentUserId();
-    const user = getStoredUser();
-    if (!userId || !user) return;
+    if (!user) return;
 
     const trimmed = displayName.trim();
     if (!trimmed) {
@@ -91,17 +90,44 @@ export function EditProfileModal({
       return;
     }
 
+    const canChangePassword = userHasPasswordProvider(user);
+    const wantsPasswordChange =
+      canChangePassword &&
+      (currentPassword.length > 0 || newPassword.length > 0 || confirmPassword.length > 0);
+
+    if (wantsPasswordChange) {
+      if (!currentPassword) {
+        setError("Enter your current password to change it");
+        return;
+      }
+      if (!newPassword) {
+        setError("Enter a new password");
+        return;
+      }
+      if (newPassword.length < 6) {
+        setError("New password must be at least 6 characters");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setError("New passwords do not match");
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
 
     try {
-      const saved = await saveUserIdentity(userId, {
+      if (wantsPasswordChange) {
+        await changePassword(currentPassword, newPassword);
+      }
+
+      const saved = await saveUserIdentity(user.uid, {
         displayName: trimmed,
         avatarUrl: avatarUrl ?? undefined,
         email: getUserEmail(user),
       });
 
-      updateStoredUserName(trimmed);
       dispatchProfileChange({
         displayName: saved.displayName,
         avatarUrl: saved.avatarUrl,
@@ -110,7 +136,7 @@ export function EditProfileModal({
       onSaved?.(saved.displayName ?? trimmed, saved.avatarUrl);
       onClose();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save profile");
+      setError(formatProfileSaveError(saveError));
     } finally {
       setSaving(false);
     }
@@ -175,6 +201,57 @@ export function EditProfileModal({
               />
             </div>
 
+            {user && userHasPasswordProvider(user) && (
+              <div className="mt-6 space-y-4 border-t border-white/10 pt-6">
+                <div>
+                  <p className="profile-section-title">Change password</p>
+                  <p className="mt-1 text-xs text-lp-muted">Leave blank to keep your current password.</p>
+                </div>
+                <div>
+                  <label htmlFor="current-password" className="profile-field-label mb-2 block">
+                    Current password
+                  </label>
+                  <input
+                    id="current-password"
+                    type="password"
+                    autoComplete="current-password"
+                    className="input-field"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="new-password" className="profile-field-label mb-2 block">
+                    New password
+                  </label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    autoComplete="new-password"
+                    className="input-field"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    placeholder="At least 6 characters"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="confirm-password" className="profile-field-label mb-2 block">
+                    Confirm new password
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    className="input-field"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="Repeat new password"
+                  />
+                </div>
+              </div>
+            )}
+
             {error && <p className="mt-4 font-mono text-xs text-red-400">{error}</p>}
 
             <div className="mt-6 flex justify-end gap-3">
@@ -205,4 +282,22 @@ export function EditProfileModal({
       )}
     </>
   );
+}
+
+function formatProfileSaveError(error: unknown): string {
+  if (!(error instanceof Error)) return "Failed to save profile";
+
+  const code = "code" in error ? String((error as { code?: string }).code) : "";
+
+  if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+    return "Current password is incorrect.";
+  }
+  if (code === "auth/weak-password") {
+    return "New password must be at least 6 characters.";
+  }
+  if (code === "auth/requires-recent-login") {
+    return "For security, sign out and sign in again before changing your password.";
+  }
+
+  return error.message || "Failed to save profile";
 }

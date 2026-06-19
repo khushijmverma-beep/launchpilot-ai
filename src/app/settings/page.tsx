@@ -1,17 +1,13 @@
 "use client";
 
 import { Nav } from "@/components/Nav";
-import {
-  clearLaunchPilotLocalData,
-  clearStoredUser,
-  getCurrentUserId,
-  getStoredUser,
-} from "@/lib/auth-session";
+import { useAuth } from "@/contexts/AuthContext";
+import { clearLaunchPilotLocalData } from "@/lib/auth-session";
 import { deleteAllUserProjects } from "@/lib/projects/firestore";
 import { deleteUserProfile } from "@/lib/users/firestore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 function PrivacyList({ items }: { items: string[] }) {
   return (
@@ -25,38 +21,27 @@ function PrivacyList({ items }: { items: string[] }) {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [signedIn, setSignedIn] = useState(false);
-  const [ready, setReady] = useState(false);
+  const { user, loading, signOut } = useAuth();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const sync = () => setSignedIn(!!getStoredUser());
-    sync();
-    setReady(true);
-    window.addEventListener("launchpilot-auth-change", sync);
-    return () => window.removeEventListener("launchpilot-auth-change", sync);
-  }, []);
-
-  function handleSignOut() {
-    clearStoredUser();
-    window.dispatchEvent(new Event("launchpilot-auth-change"));
+  async function handleSignOut() {
+    await signOut();
     router.push("/login");
   }
 
   async function handleDeleteAccount() {
-    const userId = getCurrentUserId();
-    if (!userId) return;
+    if (!user) return;
 
     setDeleting(true);
     setError(null);
 
     try {
-      await deleteAllUserProjects(userId);
-      await deleteUserProfile(userId);
+      await deleteAllUserProjects(user.uid);
+      await deleteUserProfile(user.uid);
       clearLaunchPilotLocalData();
-      window.dispatchEvent(new Event("launchpilot-auth-change"));
+      await signOut();
       setConfirmDelete(false);
       router.push("/login");
     } catch (deleteError) {
@@ -65,7 +50,7 @@ export default function SettingsPage() {
     }
   }
 
-  if (!ready) {
+  if (loading) {
     return (
       <main className="shell-bg min-h-screen">
         <Nav />
@@ -148,7 +133,7 @@ export default function SettingsPage() {
             </Link>
           </div>
 
-          {signedIn && (
+          {user && (
             <div className="mt-4 border-t border-white/10 pt-4">
               <p className="text-sm leading-6 text-lp-muted">
                 Delete your account removes your Firestore profile, all projects tied to your email, and clears
@@ -206,15 +191,14 @@ export default function SettingsPage() {
         <div className="profile-section-card space-y-3">
           <h2 className="profile-section-title">Account &amp; security</h2>
           <p className="text-sm leading-6 text-lp-muted">
-            This is a hackathon build using demo-mode authentication — your email is stored locally in the browser
-            and used as your account identifier. It is not a production-grade login system with password hashing,
-            MFA, or enterprise security controls.
+            Sign in with Google via Firebase Authentication. Your profile and projects are keyed to your Firebase
+            user ID in Firestore — not stored as a demo session in local storage.
           </p>
           <p className="text-sm leading-6 text-lp-muted">
             API keys for AI and research services live in server environment variables only. They are never written
             to your profile or exposed in the client UI.
           </p>
-          {signedIn ? (
+          {user ? (
             <button type="button" className="btn-secondary mt-2 text-xs" onClick={handleSignOut}>
               Sign out
             </button>

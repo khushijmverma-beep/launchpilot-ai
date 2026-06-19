@@ -3,21 +3,24 @@
 import { Nav } from "@/components/Nav";
 import SideRays from "@/components/animations/SideRays";
 import { ProjectCard } from "@/components/projects/ProjectCard";
+import { useAuth } from "@/contexts/AuthContext";
 import { listProjects } from "@/lib/projects/firestore";
-import { getCurrentUserId } from "@/lib/auth-session";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ProjectListItem } from "@/lib/projects/types";
 
 export default function DashboardPage() {
+  const { user, loading: authLoading } = useAuth();
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function load() {
       try {
-        setProjects(await listProjects(getCurrentUserId()));
+        setProjects(await listProjects(user?.uid ?? null));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load projects");
       } finally {
@@ -26,7 +29,7 @@ export default function DashboardPage() {
     }
 
     void load();
-  }, []);
+  }, [authLoading, user?.uid]);
 
   return (
     <main className="shell-bg relative min-h-screen">
@@ -58,7 +61,7 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {!ready ? (
+        {!ready || authLoading ? (
           <div className="terminal-card p-6">
             <p className="font-mono text-sm text-lp-muted">Loading projects…</p>
           </div>
