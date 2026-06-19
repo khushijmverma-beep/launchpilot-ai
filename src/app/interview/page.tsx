@@ -4,6 +4,7 @@ import { Badge } from "@/components/Badge";
 import { Nav } from "@/components/Nav";
 import { generateLaunchBrief, problemDiscoveryCards } from "@/lib/agents";
 import { isIrrelevantFounderQuestion, redirectMessage } from "@/lib/guardrails";
+import { playConnectDing, playDisconnectDing } from "@/lib/sounds/connectDing";
 import { demoProfile, emptyProfile } from "@/lib/seed";
 import type { FounderProfile } from "@/lib/types";
 import { ArrowRight, CheckCircle2, ClipboardList, Compass, Mic, MicOff, Search } from "lucide-react";
@@ -127,6 +128,7 @@ function InterviewInner() {
       return;
     }
     if (listening) {
+      playDisconnectDing();
       recognitionRef.current?.stop();
       setListening(false);
       return;
@@ -148,6 +150,7 @@ function InterviewInner() {
       setMessages((prev) => [...prev, "Voice capture hit an error. Continue in text mode; your workflow is unchanged."]);
     };
     recognitionRef.current = recognition;
+    playConnectDing();
     setListening(true);
     recognition.start();
   }

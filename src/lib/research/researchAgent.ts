@@ -386,7 +386,7 @@ function generateSources(intake: FounderIntake): EvidenceScore["sources"] {
 /**
  * Generate improved idea suggestion
  */
-export function generateImprovedIdea(_intake: FounderIntake, weakness: string): {
+export function generateImprovedIdea(intake: FounderIntake, weakness: string): {
   improvedIdea: string;
   targetUser: string;
   problem: string;

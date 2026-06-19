@@ -1,20 +1,21 @@
 import type { IVoiceProvider, VoiceConfig, VoiceEventHandler, VoiceProvider } from "./voiceProvider";
+import { cancelSpeech, speakNaturally } from "./speechSynthesis";
 
 /**
  * Web Speech API Provider
- * Fallback when Gemini Live is not available
- * Uses browser's built-in speech recognition
+ * Listens with silence detection, speaks with natural pacing.
  */
 
 type BrowserSpeechRecognition = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
-  onresult: ((event: { results: SpeechRecognitionResultList }) => void) | null;
+  onresult: ((event: { resultIndex: number; results: SpeechRecognitionResultList }) => void) | null;
   onend: (() => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   start: () => void;
   stop: () => void;
+  abort: () => void;
 };
 
 type SpeechWindow = Window & {
@@ -22,11 +23,18 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
 };
 
+const SILENCE_MS = 2000;
+
 export class WebSpeechProvider implements IVoiceProvider {
   private config: VoiceConfig;
   private eventHandler: VoiceEventHandler;
   private recognition: BrowserSpeechRecognition | null = null;
   private isListening = false;
+  private shouldListen = false;
+  private micPaused = false;
+  private isSpeaking = false;
+  private committedThisTurn = "";
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(config: VoiceConfig, eventHandler: VoiceEventHandler) {
     this.config = config;
@@ -45,6 +53,61 @@ export class WebSpeechProvider implements IVoiceProvider {
     return "web-speech";
   }
 
+  pauseListening(): void {
+    this.micPaused = true;
+    this.clearSilenceTimer();
+    if (this.recognition && this.isListening) {
+      this.recognition.stop();
+      this.isListening = false;
+    }
+  }
+
+  resumeListening(): void {
+    this.micPaused = false;
+    this.committedThisTurn = "";
+    if (this.shouldListen && !this.isSpeaking) {
+      this.startRecognition();
+    }
+  }
+
+  private clearSilenceTimer() {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+  }
+
+  private scheduleUtteranceCheck() {
+    this.clearSilenceTimer();
+    if (this.micPaused || this.isSpeaking) return;
+
+    this.silenceTimer = setTimeout(() => {
+      const text = this.committedThisTurn.trim();
+      if (!text || this.micPaused || this.isSpeaking) return;
+
+      this.eventHandler({ type: "utterance-ready", text });
+      this.committedThisTurn = "";
+      this.eventHandler({ type: "transcript", text: "", isFinal: true });
+    }, SILENCE_MS);
+  }
+
+  private emitLiveTranscript(interim: string) {
+    const live = [this.committedThisTurn.trim(), interim.trim()].filter(Boolean).join(" ");
+    this.eventHandler({ type: "transcript", text: live, isFinal: false });
+  }
+
+  private startRecognition() {
+    if (!this.recognition || !this.shouldListen || this.micPaused || this.isSpeaking) return;
+
+    try {
+      this.recognition.start();
+      this.isListening = true;
+      this.eventHandler({ type: "listening" });
+    } catch {
+      // start() can throw if already running
+    }
+  }
+
   async start(): Promise<void> {
     if (!this.isAvailable()) {
       throw new Error("Web Speech API not available");
@@ -57,35 +120,51 @@ export class WebSpeechProvider implements IVoiceProvider {
       throw new Error("Speech Recognition not supported");
     }
 
+    this.shouldListen = true;
+    this.micPaused = false;
+    this.committedThisTurn = "";
     this.recognition = new SpeechRecognition();
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
     this.recognition.lang = this.config.language || "en-US";
 
     this.recognition.onresult = (event) => {
-      const results = Array.from(event.results);
-      const latestResult = results[results.length - 1];
+      if (this.micPaused || this.isSpeaking) return;
 
-      if (latestResult) {
-        const transcript = latestResult[0]?.transcript || "";
-        const isFinal = latestResult.isFinal || false;
+      let interim = "";
 
-        if (transcript) {
-          this.eventHandler({
-            type: "transcript",
-            text: transcript,
-            isFinal,
-          });
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const text = result[0]?.transcript?.trim() || "";
+        if (!text) continue;
+
+        if (result.isFinal) {
+          this.committedThisTurn = [this.committedThisTurn.trim(), text].filter(Boolean).join(" ");
+          this.scheduleUtteranceCheck();
+        } else {
+          interim = [interim, text].filter(Boolean).join(" ");
         }
       }
+
+      this.emitLiveTranscript(interim);
     };
 
     this.recognition.onend = () => {
       this.isListening = false;
-      this.eventHandler({ type: "end" });
+      if (this.shouldListen && !this.micPaused && !this.isSpeaking) {
+        window.setTimeout(() => this.startRecognition(), 300);
+      } else if (!this.shouldListen) {
+        this.eventHandler({ type: "end" });
+      }
     };
 
     this.recognition.onerror = (event) => {
+      if (event.error === "no-speech" || event.error === "aborted") {
+        if (this.shouldListen && !this.micPaused && !this.isSpeaking) {
+          window.setTimeout(() => this.startRecognition(), 400);
+        }
+        return;
+      }
       this.isListening = false;
       this.eventHandler({
         type: "error",
@@ -93,25 +172,38 @@ export class WebSpeechProvider implements IVoiceProvider {
       });
     };
 
-    this.recognition.start();
-    this.isListening = true;
-    this.eventHandler({ type: "listening" });
+    this.startRecognition();
   }
 
   async send(text: string): Promise<void> {
-    // Web Speech API doesn't support sending - it only transcribes
-    // Text responses are handled by the UI layer
-    this.eventHandler({
-      type: "speaking",
-      text,
-    });
+    this.pauseListening();
+    this.isSpeaking = true;
+    this.eventHandler({ type: "speaking", text });
+
+    await speakNaturally(text, this.config.language || "en-US");
+
+    this.isSpeaking = false;
+    this.committedThisTurn = "";
+
+    if (this.shouldListen) {
+      this.micPaused = false;
+      this.startRecognition();
+    }
   }
 
   stop(): void {
-    if (this.recognition && this.isListening) {
-      this.recognition.stop();
+    this.shouldListen = false;
+    this.micPaused = false;
+    this.isSpeaking = false;
+    this.clearSilenceTimer();
+    this.committedThisTurn = "";
+
+    if (this.recognition) {
+      this.recognition.abort();
       this.recognition = null;
       this.isListening = false;
     }
+
+    cancelSpeech();
   }
 }

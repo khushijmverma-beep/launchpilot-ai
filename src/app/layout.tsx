@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "LaunchPilot AI",
   description: "A responsible AI execution navigator for student founders.",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { generateLaunchBrief } from "./agents";
-import { selectGeminiKey } from "./keyPool";
+import { chatCompletion, getActiveProvider } from "./llm";
 import { sourceRegistry } from "./rag";
 import type { FounderProfile, LaunchBrief, ResearchPack, Source } from "./types";
 
@@ -54,10 +54,7 @@ function downloadedSeed() {
   }
 }
 
-async function geminiSummary(profile: FounderProfile, pack: ResearchPack) {
-  const key = selectGeminiKey(0);
-  if (!key) return undefined;
-
+async function researchSummary(profile: FounderProfile, pack: ResearchPack) {
   const prompt = `Create a concise startup research synthesis for this founder. Return practical, non-hype advice.
 Founder: ${JSON.stringify(profile)}
 Research signals: ${JSON.stringify({
@@ -68,20 +65,16 @@ Research signals: ${JSON.stringify({
     sources: pack.sources.map((source) => ({ title: source.title, url: source.url, label: source.label })),
   })}`;
 
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": key,
-    },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.35, maxOutputTokens: 700 },
-    }),
-  });
-  if (!response.ok) return undefined;
-  const data = await response.json();
-  return data?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || "").join("\n").trim() || undefined;
+  return chatCompletion(
+    [
+      {
+        role: "system",
+        content: "You are a pragmatic startup research analyst. Be concise and evidence-based.",
+      },
+      { role: "user", content: prompt },
+    ],
+    { temperature: 0.35 }
+  );
 }
 
 export async function runLiveResearch(profile: FounderProfile): Promise<ResearchPack> {
@@ -264,12 +257,18 @@ export async function runLiveResearch(profile: FounderProfile): Promise<Research
     skillResources: skillResources.size ? Array.from(skillResources) : ["USAII learning path: customer discovery, MVP design, AI prototyping, and founder communication."],
   };
 
-  const aiSummary = await geminiSummary(profile, pack).catch(() => undefined);
+  const aiSummary = await researchSummary(profile, pack).catch(() => undefined);
+  const provider = getActiveProvider();
   return {
     ...pack,
     mode: aiSummary ? "live" : pack.mode,
     aiSummary,
-    logs: aiSummary ? [...pack.logs, "Generated synthesis with Gemini using retrieved sources."] : [...pack.logs, "Gemini key not configured or request failed; used retrieved data plus deterministic reasoning."],
+    logs: aiSummary
+      ? [...pack.logs, `Generated synthesis with ${provider === "grok" ? "Grok" : "Groq Llama"} using retrieved sources.`]
+      : [
+          ...pack.logs,
+          "GROK_API_KEY / GROQ_API_KEY not configured or request failed; used retrieved data plus deterministic reasoning.",
+        ],
   };
 }
 

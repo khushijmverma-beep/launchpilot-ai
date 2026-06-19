@@ -1,36 +1,74 @@
 "use client";
 
-import { Nav } from "@/components/Nav";
+import { DotFieldBackground } from "@/components/animations/DotFieldBackground";
+import { Logo } from "@/components/Logo";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   function continueDemo() {
-    localStorage.setItem("launchpilot-user", JSON.stringify({ name: name || "Demo Founder", email, mode: "demo" }));
+    const user = { email: email || "founder@demo.local", mode: "demo" };
+    localStorage.setItem("launchpilot-user", JSON.stringify(user));
+    window.dispatchEvent(new Event("launchpilot-auth-change"));
     router.push("/start");
   }
 
   return (
-    <main className="shell-bg min-h-screen">
-      <Nav />
-      <section className="mx-auto flex min-h-[calc(100vh-88px)] max-w-xl items-center px-5 pb-10">
-        <div className="glass w-full rounded-[32px] p-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-600">Demo login</p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">Continue as a founder.</h1>
-          <p className="mt-3 text-slate-600">No production auth is required for the hackathon MVP. Your workspace is saved in this browser.</p>
-          <div className="mt-6 space-y-3">
-            <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100" placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <button className="mt-6 w-full rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white" onClick={continueDemo}>
-            Continue as Demo Founder
-          </button>
+    <main className="relative min-h-screen bg-black">
+      <DotFieldBackground variant="calm" bulgeStrength={32} />
+
+      <div className="page-content relative z-10 flex min-h-screen flex-col items-center justify-center px-5">
+        <div className="mb-8 flex items-center gap-3 text-white">
+          <Logo size={32} />
+          <span className="font-mono text-sm tracking-wide">LaunchPilot AI</span>
         </div>
-      </section>
+
+        <div className="w-full max-w-sm border border-white/15 bg-black/80 p-8">
+          <p className="mono-label">Sign in</p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">Continue to your workspace</h1>
+
+          <div className="mt-8 space-y-4">
+            <div>
+              <label htmlFor="email" className="mono-label mb-2 block">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                className="input-field"
+                placeholder="you@university.edu"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="mono-label mb-2 block">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                className="input-field"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <button className="btn-primary mt-8 w-full" onClick={continueDemo}>
+            Continue
+          </button>
+
+          <p className="mt-6 text-center font-mono text-xs text-lp-subtle">
+            Demo mode — no production auth required
+          </p>
+        </div>
+      </div>
     </main>
   );
 }

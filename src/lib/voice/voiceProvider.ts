@@ -16,6 +16,7 @@ export type VoiceEvent =
   | { type: "listening" }
   | { type: "transcribing" }
   | { type: "transcript"; text: string; isFinal: boolean }
+  | { type: "utterance-ready"; text: string }
   | { type: "thinking" }
   | { type: "speaking"; text: string }
   | { type: "audio"; data: ArrayBuffer }
@@ -28,6 +29,8 @@ export interface IVoiceProvider {
   start(): Promise<void>;
   stop(): void;
   send(text: string): Promise<void>;
+  pauseListening?(): void;
+  resumeListening?(): void;
   isAvailable(): boolean;
   getProvider(): VoiceProvider;
 }
@@ -36,19 +39,18 @@ export interface IVoiceProvider {
  * Detect which voice provider is available
  */
 export function detectAvailableProvider(): VoiceProvider {
-  // Check for Gemini API key
   if (typeof window !== "undefined") {
-    const hasGeminiKey = !!process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    if (hasGeminiKey) {
-      return "gemini-live";
-    }
-
-    // Check for Web Speech API
     const SpeechRecognition =
       (window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).SpeechRecognition ||
       (window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
     if (SpeechRecognition) {
       return "web-speech";
+    }
+
+    // Gemini Live requires a client-exposed key; prefer Web Speech when available
+    const hasGeminiKey = !!process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    if (hasGeminiKey) {
+      return "gemini-live";
     }
   }
 
