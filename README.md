@@ -1,6 +1,6 @@
 ## Launch this APP!
 
-https://launchpilot-dvqqphsag-khushijmverma-beeps-projects.vercel.app/
+https://launchpilot-ai-psi.vercel.app/
 
 # LaunchPilot AI
 
