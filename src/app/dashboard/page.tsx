@@ -6,10 +6,12 @@ import { ProjectCard } from "@/components/projects/ProjectCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { listProjects } from "@/lib/projects/firestore";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ProjectListItem } from "@/lib/projects/types";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [ready, setReady] = useState(false);
@@ -18,9 +20,16 @@ export default function DashboardPage() {
   useEffect(() => {
     if (authLoading) return;
 
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    const userId = user.uid;
+
     async function load() {
       try {
-        setProjects(await listProjects(user?.uid ?? null));
+        setProjects(await listProjects(userId));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load projects");
       } finally {
@@ -29,7 +38,7 @@ export default function DashboardPage() {
     }
 
     void load();
-  }, [authLoading, user?.uid]);
+  }, [authLoading, user, router]);
 
   return (
     <main className="shell-bg relative min-h-screen">

@@ -15,8 +15,8 @@ import { isIrrelevantFounderQuestion, redirectMessage } from "@/lib/guardrails";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { getProject } from "@/lib/projects/firestore";
+import { useSearchParams, useRouter } from "next/navigation";
+import { getProject, userOwnsProject } from "@/lib/projects/firestore";
 import { playClickSound } from "@/lib/sounds/click";
 import { mergeWithInterviewPrefill } from "@/lib/users/prefill";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,6 +24,7 @@ import { useAuth } from "@/contexts/AuthContext";
 type ChatMessage = { role: "assistant" | "user"; content: string; status?: string };
 
 function InterviewChatPageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const projectId = searchParams.get("projectId") ?? undefined;
@@ -39,14 +40,22 @@ function InterviewChatPageInner() {
   const interviewCompleteRef = useRef(false);
 
   useEffect(() => {
-    if (authLoading || bootstrapRef.current) return;
+    if (authLoading) return;
+    if (bootstrapRef.current) return;
+
+    if (projectId && !user) {
+      router.replace("/login");
+      return;
+    }
+
     bootstrapRef.current = true;
+    const userId = user?.uid;
 
     async function bootstrap() {
       try {
-        if (projectId) {
+        if (projectId && userId) {
           const project = await getProject(projectId);
-          if (project && project.transcript.length > 0) {
+          if (project && userOwnsProject(project, userId) && project.transcript.length > 0) {
             setMessages(project.transcript.map((entry) => ({ role: entry.role, content: entry.content })));
             setConversation(project.transcript);
             setCollectedFields(project.collectedFields);
@@ -75,7 +84,7 @@ function InterviewChatPageInner() {
     }
 
     void bootstrap();
-  }, [projectId, authLoading, user?.uid]);
+  }, [projectId, authLoading, user, router]);
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing || isBootstrapping) return;

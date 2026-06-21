@@ -21,7 +21,7 @@ import { createInitialProgress, runResearchEvaluation, type ResearchProgress as 
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useRef, useState, Suspense } from "react";
-import { getProject } from "@/lib/projects/firestore";
+import { getProject, userOwnsProject } from "@/lib/projects/firestore";
 import { loadInterviewPrefill } from "@/lib/users/prefill";
 import { useAuth } from "@/contexts/AuthContext";
 import type { EvidenceScore } from "@/lib/intake/schema";
@@ -51,13 +51,20 @@ function InterviewVoicePageInner() {
   const projectLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (projectLoadedRef.current || !projectId) return;
+    if (authLoading || projectLoadedRef.current || !projectId) return;
+
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
     projectLoadedRef.current = true;
     const id = projectId;
+    const userId = user.uid;
 
     async function loadProject() {
       const project = await getProject(id);
-      if (!project) return;
+      if (!project || !userOwnsProject(project, userId)) return;
 
       const transcript = project.transcript.filter((entry) => entry.content !== "— Conversation ended —");
       conversationRef.current = transcript;
@@ -67,7 +74,7 @@ function InterviewVoicePageInner() {
     }
 
     void loadProject();
-  }, [projectId]);
+  }, [projectId, authLoading, user, router]);
 
   useEffect(() => {
     if (projectId || authLoading) return;

@@ -7,23 +7,40 @@ import { BlueprintStepper } from "@/components/projects/BlueprintStepper";
 import { ProjectNameEditor } from "@/components/projects/ProjectNameEditor";
 import { ProjectStatsSummary } from "@/components/projects/ProjectStatsSummary";
 import { StrengthsWeaknessesChart } from "@/components/projects/StrengthsWeaknessesChart";
-import { getProject, updateProjectName } from "@/lib/projects/firestore";
+import { useAuth } from "@/contexts/AuthContext";
+import { getProject, updateProjectName, userOwnsProject } from "@/lib/projects/firestore";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Project } from "@/lib/projects/types";
 
 export default function ProjectDetailPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
+  const { user, loading: authLoading } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    const userId = user.uid;
+
     async function load() {
       if (!params.id) return;
       try {
-        setProject(await getProject(params.id));
+        const loaded = await getProject(params.id);
+        if (!loaded || !userOwnsProject(loaded, userId)) {
+          setProject(null);
+          return;
+        }
+        setProject(loaded);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load project");
       } finally {
@@ -32,7 +49,7 @@ export default function ProjectDetailPage() {
     }
 
     void load();
-  }, [params.id]);
+  }, [params.id, authLoading, user, router]);
 
   async function handleRename(name: string) {
     if (!project) return;
@@ -44,7 +61,7 @@ export default function ProjectDetailPage() {
     }
   }
 
-  if (!ready) {
+  if (!ready || authLoading) {
     return (
       <main className="shell-bg min-h-screen">
         <Nav />

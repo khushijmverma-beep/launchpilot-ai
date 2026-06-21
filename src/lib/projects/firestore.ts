@@ -4,7 +4,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  orderBy,
   query,
   setDoc,
   updateDoc,
@@ -108,25 +107,21 @@ export async function updateProject(
 }
 
 export async function listProjects(userId?: string | null): Promise<ProjectListItem[]> {
-  const snapshot = userId
-    ? await getDocs(query(collection(db, "projects"), where("userId", "==", userId)))
-    : await getDocs(query(collection(db, "projects"), orderBy("createdAt", "desc")));
+  if (!userId) return [];
 
-  const rows = snapshot.docs.map((entry) => {
-    const data = entry.data() as FirestoreProjectDoc;
-    return {
-      id: entry.id,
-      name: data.name,
-      description: data.description,
-      createdAt: timestampToIso(data.createdAt),
-    };
-  });
+  const snapshot = await getDocs(query(collection(db, "projects"), where("userId", "==", userId)));
 
-  if (userId) {
-    return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }
-
-  return rows;
+  return snapshot.docs
+    .map((entry) => {
+      const data = entry.data() as FirestoreProjectDoc;
+      return {
+        id: entry.id,
+        name: data.name,
+        description: data.description,
+        createdAt: timestampToIso(data.createdAt),
+      };
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function getUserProjectSummary(userId: string): Promise<UserProjectSummary> {
@@ -175,6 +170,14 @@ export async function getProject(id: string): Promise<Project | null> {
   const snapshot = await getDoc(doc(db, "projects", id));
   if (!snapshot.exists()) return null;
   return docToProject(snapshot.id, snapshot.data());
+}
+
+export function userOwnsProject(
+  project: Pick<Project, "userId">,
+  userId: string | null | undefined
+): boolean {
+  if (!userId || !project.userId) return false;
+  return project.userId === userId;
 }
 
 export async function updateProjectName(id: string, name: string): Promise<Project | null> {
