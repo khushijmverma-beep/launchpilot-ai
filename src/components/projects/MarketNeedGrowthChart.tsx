@@ -4,11 +4,13 @@ import {
   buildMarketGrowthSeries,
   formatMarketUsd,
   formatMarketUsdExact,
+  getCompetitorLineColors,
 } from "@/lib/projects/marketGrowth";
-import type { ProjectStats } from "@/lib/projects/types";
+import type { ProjectAgentOutputs, ProjectStats } from "@/lib/projects/types";
 import {
   CategoryScale,
   Chart as ChartJS,
+  Legend,
   LineElement,
   LinearScale,
   PointElement,
@@ -16,13 +18,14 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
 type MarketNeedGrowthChartProps = {
   stats: ProjectStats | null;
   projectId: string;
   projectName?: string;
   collectedFields?: Record<string, string | null>;
+  agentOutputs?: ProjectAgentOutputs;
 };
 
 export function MarketNeedGrowthChart({
@@ -30,8 +33,14 @@ export function MarketNeedGrowthChart({
   projectId,
   projectName,
   collectedFields,
+  agentOutputs,
 }: MarketNeedGrowthChartProps) {
-  const series = buildMarketGrowthSeries(stats, `${projectId}-${projectName ?? "project"}`, collectedFields);
+  const series = buildMarketGrowthSeries(
+    stats,
+    `${projectId}-${projectName ?? "project"}`,
+    collectedFields,
+    agentOutputs?.competitor?.finding
+  );
 
   if (!series) {
     return (
@@ -49,7 +58,40 @@ export function MarketNeedGrowthChart({
       ? getComputedStyle(document.documentElement).getPropertyValue("--chart-strength").trim() || "#e8e8e6"
       : "#e8e8e6";
 
-  const pointByIndex = series.points;
+  const competitorColors = getCompetitorLineColors();
+  const projectLabel = projectName ?? "Your project";
+
+  const datasets = [
+    {
+      label: projectLabel,
+      data: series.points.map((point) => point.valueUsd),
+      borderColor: lineColor,
+      borderWidth: 2.5,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: "#ffffff",
+      pointHoverBorderColor: lineColor,
+      tension: 0,
+      fill: false,
+    },
+    ...series.competitors.map((competitor, index) => ({
+      label: competitor.name,
+      data: competitor.points.map((point) => point.valueUsd),
+      borderColor: competitorColors[index % competitorColors.length],
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: competitorColors[index % competitorColors.length],
+      pointHoverBorderColor: "#ffffff",
+      tension: 0,
+      fill: false,
+    })),
+  ];
+
+  const monthlyByDataset: Array<Array<{ monthlyNetUsd: number } | undefined>> = [
+    series.points,
+    ...series.competitors.map((competitor) => competitor.points),
+  ];
 
   return (
     <div className="terminal-card p-6">
@@ -67,20 +109,7 @@ export function MarketNeedGrowthChart({
         <Line
           data={{
             labels: series.points.map((point) => point.label),
-            datasets: [
-              {
-                data: series.points.map((point) => point.valueUsd),
-                borderColor: lineColor,
-                borderWidth: 2,
-                pointRadius: 0,
-                pointHoverRadius: 4,
-                pointHoverBackgroundColor: "#ffffff",
-                pointHoverBorderColor: lineColor,
-                tension: 0,
-                fill: false,
-                stepped: false,
-              },
-            ],
+            datasets,
           }}
           options={{
             responsive: true,
@@ -90,7 +119,17 @@ export function MarketNeedGrowthChart({
               intersect: false,
             },
             plugins: {
-              legend: { display: false },
+              legend: {
+                display: series.competitors.length > 0,
+                position: "bottom",
+                labels: {
+                  color: "#d4d4d4",
+                  font: { size: 10, family: "monospace" },
+                  boxWidth: 14,
+                  boxHeight: 2,
+                  padding: 12,
+                },
+              },
               tooltip: {
                 backgroundColor: "rgba(0,0,0,0.92)",
                 borderColor: "rgba(255,255,255,0.15)",
@@ -101,17 +140,16 @@ export function MarketNeedGrowthChart({
                 callbacks: {
                   title: (items) => {
                     const index = items[0]?.dataIndex ?? 0;
-                    return pointByIndex[index]?.label || items[0]?.label || "";
+                    return series.points[index]?.label || items[0]?.label || "";
                   },
                   label: (context) => {
-                    const index = context.dataIndex;
-                    const point = pointByIndex[index];
+                    const datasetIndex = context.datasetIndex;
+                    const pointIndex = context.dataIndex;
                     const cumulative = context.parsed.y ?? 0;
-                    const lines = [
-                      `Cumulative profit: ${formatMarketUsdExact(cumulative)}`,
-                    ];
-                    if (point) {
-                      lines.push(`This month: ${formatMarketUsdExact(point.monthlyNetUsd)}`);
+                    const monthly = monthlyByDataset[datasetIndex]?.[pointIndex]?.monthlyNetUsd;
+                    const lines = [`${context.dataset.label}: ${formatMarketUsdExact(cumulative)}`];
+                    if (monthly !== undefined) {
+                      lines.push(`This month: ${formatMarketUsdExact(monthly)}`);
                     }
                     return lines;
                   },

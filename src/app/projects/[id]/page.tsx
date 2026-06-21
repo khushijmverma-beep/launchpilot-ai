@@ -170,6 +170,7 @@ export default function ProjectDetailPage() {
                 projectId={project.id}
                 projectName={project.name}
                 collectedFields={project.collectedFields}
+                agentOutputs={project.agentOutputs}
               />
             </section>
 

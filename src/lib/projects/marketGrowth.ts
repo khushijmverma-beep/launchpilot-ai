@@ -13,13 +13,22 @@ export type MarketGrowthCitation = {
   host: string;
 };
 
+export type CompetitorProfitSeries = {
+  name: string;
+  points: MarketGrowthPoint[];
+  targetMonthlyProfitUsd: number;
+};
+
 export type MarketGrowthSeries = {
   points: MarketGrowthPoint[];
+  competitors: CompetitorProfitSeries[];
   targetMonthlyProfitUsd: number;
   annualGrowthRate: number;
   citations: MarketGrowthCitation[];
   footnote: string;
 };
+
+const COMPETITOR_RED = ["#ef4444", "#f87171", "#dc2626", "#fb7185", "#b91c1c"];
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const FORECAST_MONTHS = 24;
@@ -173,7 +182,7 @@ function buildProfitForecastPoints(
   stats: ProjectStats,
   seed: string,
   budgetUsd: number
-): { points: MarketGrowthPoint[]; targetMonthlyProfitUsd: number } {
+): { points: MarketGrowthPoint[]; targetMonthlyProfitUsd: number; monthDates: Date[] } {
   const tamUsd = parseTamUsd(stats.marketSizeEstimate);
   const confidence = stats.confidenceScore ?? 50;
   const demandScore = stats.evidenceScore?.breakdown?.demandEvidence ?? 8;
@@ -194,9 +203,11 @@ function buildProfitForecastPoints(
 
   let cumulative = 0;
   const baseBurn = Math.max(450, budgetUsd * 0.12 + 350);
+  const monthDates: Date[] = [];
 
   for (let index = 0; index < FORECAST_MONTHS; index += 1) {
     const monthDate = new Date(now.getFullYear(), now.getMonth() + index, 1);
+    monthDates.push(monthDate);
     const progress = index / (FORECAST_MONTHS - 1);
     const ramp = Math.pow(progress, 1.65);
     const baseRevenue = targetMonthlyProfitUsd * ramp * (0.08 + progress * 0.92);
@@ -214,7 +225,138 @@ function buildProfitForecastPoints(
     });
   }
 
-  return { points, targetMonthlyProfitUsd: Math.round(targetMonthlyProfitUsd) };
+  return { points, targetMonthlyProfitUsd: Math.round(targetMonthlyProfitUsd), monthDates };
+}
+
+export function sanitizeCompetitorName(raw: string): string {
+  let name = raw.trim();
+  if (!name) return "Competitor";
+
+  if (/^https?:\/\//i.test(name)) {
+    try {
+      name = new URL(name).hostname.replace(/^www\./, "");
+    } catch {
+      /* keep raw */
+    }
+  }
+
+  name = name.split(" | ")[0]?.split(" - ")[0]?.split(" – ")[0]?.split(":")[0]?.trim() ?? name;
+  if (name.length > 30) {
+    name = `${name.slice(0, 28).trim()}…`;
+  }
+
+  return name || "Competitor";
+}
+
+export function resolveCompetitorNames(
+  stats: ProjectStats,
+  competitorFinding?: string
+): string[] {
+  const fromStats = stats.competitors ?? [];
+  const fromFinding = competitorFinding ? parseCompetitorsFromFinding(competitorFinding) : [];
+  const merged = [...fromStats, ...fromFinding];
+  const seen = new Set<string>();
+
+  return merged
+    .map(sanitizeCompetitorName)
+    .filter((name) => {
+      const key = name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 4);
+}
+
+function parseCompetitorsFromFinding(finding: string): string[] {
+  const marketMatch = finding.match(/alternatives (?:include|found|retained were):\s*(.+?)(?:\.|$)/i);
+  if (marketMatch?.[1]) {
+    return marketMatch[1]
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  const legacyMatch = finding.match(/alternatives found:\s*(.+?)\.?$/i);
+  if (legacyMatch?.[1]) {
+    return legacyMatch[1]
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function buildCompetitorProfitForecastPoints(
+  name: string,
+  seed: string,
+  founderTargetMonthly: number,
+  index: number,
+  annualGrowthRate: number,
+  monthDates: Date[]
+): CompetitorProfitSeries {
+  const competitorSeed = `${seed}:competitor:${name}:${index}`;
+  const scale = 1.75 + index * 0.72 + seededUnit(competitorSeed, 12) * 0.95;
+  const targetMonthlyProfitUsd = Math.round(founderTargetMonthly * scale);
+  const volatility = 0.42 + seededUnit(competitorSeed, 34) * 0.28;
+  const shocks = buildShockMultipliers(competitorSeed, FORECAST_MONTHS, volatility);
+  const startingCumulative = Math.round(
+    targetMonthlyProfitUsd * (10 + index * 3 + seededUnit(competitorSeed, 88) * 8)
+  );
+  const operatingCost = targetMonthlyProfitUsd * (0.28 + index * 0.04);
+
+  let cumulative = startingCumulative;
+  const points: MarketGrowthPoint[] = [];
+
+  for (let monthIndex = 0; monthIndex < FORECAST_MONTHS; monthIndex += 1) {
+    const progress = monthIndex / (FORECAST_MONTHS - 1);
+    const baseRevenue = targetMonthlyProfitUsd * (0.82 + progress * 0.28);
+    const microNoise = (seededUnit(competitorSeed, monthIndex + 5000) - 0.5) * baseRevenue * 0.42;
+    const revenue = Math.max(targetMonthlyProfitUsd * 0.55, (baseRevenue + microNoise) * shocks[monthIndex]);
+    const monthlyNetUsd = revenue - operatingCost;
+
+    cumulative += monthlyNetUsd;
+
+    points.push({
+      label: monthLabel(monthDates[monthIndex], monthIndex, FORECAST_MONTHS),
+      valueUsd: Math.round(cumulative),
+      monthlyNetUsd: Math.round(monthlyNetUsd),
+    });
+  }
+
+  return {
+    name,
+    points,
+    targetMonthlyProfitUsd,
+  };
+}
+
+function buildCompetitorSeries(
+  stats: ProjectStats,
+  seed: string,
+  founderTargetMonthly: number,
+  annualGrowthRate: number,
+  monthDates: Date[],
+  competitorFinding?: string
+): CompetitorProfitSeries[] {
+  const names = resolveCompetitorNames(stats, competitorFinding);
+  if (!names.length) return [];
+
+  return names.map((name, index) =>
+    buildCompetitorProfitForecastPoints(
+      name,
+      seed,
+      founderTargetMonthly,
+      index,
+      annualGrowthRate,
+      monthDates
+    )
+  );
+}
+
+export function getCompetitorLineColors(): string[] {
+  return COMPETITOR_RED;
 }
 
 function pickCitations(sources: ProjectSourceSummary[], stats?: ProjectStats | null): MarketGrowthCitation[] {
@@ -258,23 +400,36 @@ function pickCitations(sources: ProjectSourceSummary[], stats?: ProjectStats | n
 export function buildMarketGrowthSeries(
   stats: ProjectStats | null,
   seed = "project",
-  collectedFields?: Record<string, string | null>
+  collectedFields?: Record<string, string | null>,
+  competitorFinding?: string
 ): MarketGrowthSeries | null {
   if (!stats?.marketSizeEstimate) return null;
 
   const sources = resolveProjectSources(stats);
   const annualGrowthRate = deriveAnnualGrowthRate(stats, sources);
   const budgetUsd = parseBudgetUsd(collectedFields?.budget);
-  const { points, targetMonthlyProfitUsd } = buildProfitForecastPoints(stats, seed, budgetUsd);
+  const { points, targetMonthlyProfitUsd, monthDates } = buildProfitForecastPoints(stats, seed, budgetUsd);
+  const competitors = buildCompetitorSeries(
+    stats,
+    seed,
+    targetMonthlyProfitUsd,
+    annualGrowthRate,
+    monthDates,
+    competitorFinding
+  );
   const citations = pickCitations(sources, stats);
 
   const rateLabel = `${(annualGrowthRate * 100).toFixed(1)}%`;
+  const competitorNote = competitors.length
+    ? ` Red lines are modeled cumulative profit for ${competitors.length} researched competitor${competitors.length === 1 ? "" : "s"}.`
+    : "";
   const footnote = `24-month profit forecast from ${stats.sourcesAnalyzed} research source${
     stats.sourcesAnalyzed === 1 ? "" : "s"
-  } — ${stats.marketSizeEstimate} market, ${rateLabel} demand growth, $${budgetUsd.toLocaleString()} budget baseline. Peaks/dips model launch spikes, slow months, and reinvestment. Not audited financial advice.`;
+  } — ${stats.marketSizeEstimate} market, ${rateLabel} demand growth, $${budgetUsd.toLocaleString()} budget baseline.${competitorNote} Not audited financial advice.`;
 
   return {
     points,
+    competitors,
     targetMonthlyProfitUsd,
     annualGrowthRate,
     citations,

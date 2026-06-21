@@ -171,6 +171,7 @@ describe("Market growth series", () => {
         confidenceScore: 72,
         competitorsFound: 3,
         marketSizeEstimate: "$12M TAM",
+        competitors: ["ParkMobile", "SpotHero", "ParkWhiz"],
         sources: [
           {
             title: "Global EdTech Market Report 2025",
@@ -219,6 +220,8 @@ describe("Market growth series", () => {
 
     expect(hasPeak || hasDip).toBe(true);
     expect(formatMarketUsdExact(series!.points[0].monthlyNetUsd)).toMatch(/^-\$/);
+    expect(series!.competitors.length).toBe(3);
+    expect(series!.competitors[0].points).toHaveLength(24);
     expect(series!.citations.length).toBeGreaterThan(0);
   });
 });
