@@ -45,12 +45,12 @@ function toStored(agent: AgentOutput | undefined, fallbackName: string): StoredA
 
 export function buildAgentOutputs(agents: AgentOutput[]): ProjectAgentOutputs {
   return {
-    leadResearch: toStored(findAgent(agents, "Lead Research"), "Lead Research Agent"),
-    competitor: toStored(findAgent(agents, "Competitor"), "Competitor Subagent"),
-    painPoint: toStored(findAgent(agents, "Pain Point"), "Pain Point Subagent"),
-    opportunity: toStored(findAgent(agents, "Opportunity"), "Opportunity Subagent"),
-    skillGap: toStored(findAgent(agents, "Skill Gap"), "Skill Gap Subagent"),
-    sourceQuality: toStored(findAgent(agents, "Source Quality"), "Source Quality Agent"),
+    leadResearch: toStored(findAgent(agents, "Market Reality"), "Market Reality Agent"),
+    competitor: toStored(findAgent(agents, "Assumption & Risk"), "Assumption & Risk Agent"),
+    painPoint: toStored(findAgent(agents, "MVP Scope"), "MVP Scope Agent"),
+    opportunity: toStored(findAgent(agents, "Opportunity"), "Opportunity Agent"),
+    skillGap: toStored(findAgent(agents, "Roadmap"), "Roadmap Agent"),
+    sourceQuality: toStored(findAgent(agents, "Pitch"), "Pitch & Communication Agent"),
   };
 }
 
@@ -60,40 +60,57 @@ export function deriveStrengthsWeaknesses(
   confidenceScore: number
 ): StrengthWeaknessCategory[] {
   const fs = brief.founderScore;
-  const lead = findAgent(agents, "Lead Research");
-  const competitor = findAgent(agents, "Competitor");
-  const pain = findAgent(agents, "Pain Point");
+  const market = findAgent(agents, "Market Reality");
+  const risk = findAgent(agents, "Assumption & Risk");
+  const mvp = findAgent(agents, "MVP Scope");
   const opportunity = findAgent(agents, "Opportunity");
-  const skill = findAgent(agents, "Skill Gap");
+  const roadmap = findAgent(agents, "Roadmap");
 
   const competitorPressure = Math.min(8, brief.competitors.length * 2);
+  const evidenceBreakdown = brief.evidenceScore?.breakdown;
 
   return [
     {
       category: "Market opportunity",
-      score: clampScore((scaleFounderMetric(fs.marketOpportunity) + confidenceDelta(opportunity?.confidence ?? "Medium")) / 2),
+      score: clampScore(
+        evidenceBreakdown
+          ? (evidenceBreakdown.demandEvidence + evidenceBreakdown.competitorGap) / 3.5 - 5
+          : (scaleFounderMetric(fs.marketOpportunity) + confidenceDelta(opportunity?.confidence ?? "Medium")) / 2
+      ),
     },
     {
       category: "Technical feasibility",
-      score: clampScore(scaleFounderMetric(fs.feasibility)),
+      score: clampScore(
+        evidenceBreakdown
+          ? evidenceBreakdown.feasibility / 1.5 - 5
+          : scaleFounderMetric(fs.feasibility)
+      ),
     },
     {
       category: "Team capability",
-      score: clampScore((scaleFounderMetric(fs.founderFit) + confidenceDelta(skill?.confidence ?? "Medium")) / 2),
+      score: clampScore(
+        evidenceBreakdown
+          ? evidenceBreakdown.founderMarketFit / 1 - 5
+          : scaleFounderMetric(fs.founderFit)
+      ),
     },
     {
       category: "Execution speed",
       score: clampScore(
-        (scaleFounderMetric(100 - fs.executionDifficulty) + confidenceDelta(lead?.confidence ?? "Medium")) / 2
+        (scaleFounderMetric(100 - fs.executionDifficulty) + confidenceDelta(roadmap?.confidence ?? "Medium")) / 2
       ),
     },
     {
       category: "Competitive moat",
-      score: clampScore(6 - competitorPressure + confidenceDelta(competitor?.confidence ?? "Medium") / 2),
+      score: clampScore(6 - competitorPressure + confidenceDelta(market?.confidence ?? "Medium") / 2),
     },
     {
       category: "Customer validation",
-      score: clampScore((scaleFounderMetric(confidenceScore) + confidenceDelta(pain?.confidence ?? "Medium")) / 2),
+      score: clampScore(
+        evidenceBreakdown
+          ? evidenceBreakdown.demandEvidence / 2 - 5
+          : (scaleFounderMetric(confidenceScore) + confidenceDelta(risk?.confidence ?? "Medium")) / 2
+      ),
     },
   ];
 }

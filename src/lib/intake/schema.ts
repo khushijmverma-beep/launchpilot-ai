@@ -39,6 +39,39 @@ export const AnswerValidationSchema = z.object({
 
 export type AnswerValidation = z.infer<typeof AnswerValidationSchema>;
 
+export const ResearchSourceSchema = z.object({
+  id: z.string().optional(),
+  title: z.string(),
+  url: z.string(),
+  snippet: z.string(),
+  sourceType: z.enum(["official", "competitor", "community_signal", "review", "market_report", "blog", "dataset", "fallback"]),
+  supports: z.string(),
+  limitation: z.string(),
+  confidence: z.enum(["low", "medium", "high"]),
+  provider: z.enum(["gemini_grounding", "google", "tavily", "exa", "serpapi", "public_api", "direct", "offline"]).default("offline"),
+  query: z.string().optional(),
+  verified: z.boolean().default(false),
+  relevanceScore: z.number().min(0).max(1).default(0),
+  qualityScore: z.number().min(0).max(1).default(0),
+});
+
+export type ResearchSource = z.infer<typeof ResearchSourceSchema>;
+
+export const EvidenceClaimSchema = z.object({
+  id: z.string(),
+  claim: z.string(),
+  category: z.enum(["problem", "target_user", "demand", "competitor", "pricing", "feasibility", "opportunity", "risk"]),
+  evidenceType: z.enum(["founder_statement", "official", "competitor_primary", "review", "community_signal", "market_report", "dataset", "inference"]),
+  sourceIds: z.array(z.string()),
+  support: z.enum(["supports", "contradicts", "context_only"]),
+  confidence: z.enum(["low", "medium", "high"]),
+  limitation: z.string(),
+  relevanceScore: z.number().min(0).max(1),
+  qualityScore: z.number().min(0).max(1),
+});
+
+export type EvidenceClaim = z.infer<typeof EvidenceClaimSchema>;
+
 export const EvidenceScoreSchema = z.object({
   score: z.number().min(0).max(100),
   verdict: z.enum(["strong", "promising_needs_modification", "weak", "reject"]),
@@ -47,17 +80,28 @@ export const EvidenceScoreSchema = z.object({
   weakestSignal: z.string(),
   whatCouldBeWrong: z.string(),
   nextValidationStep: z.string(),
-  sources: z.array(
-    z.object({
-      title: z.string(),
-      url: z.string(),
-      snippet: z.string(),
-      sourceType: z.string(),
-      supports: z.string(),
-      limitation: z.string().optional(),
-      confidence: z.enum(["low", "medium", "high"]),
-    })
-  ),
+  breakdown: z.object({
+    problemPainClarity: z.number().min(0).max(20),
+    targetUserSharpness: z.number().min(0).max(15),
+    demandEvidence: z.number().min(0).max(20),
+    competitorGap: z.number().min(0).max(15),
+    feasibility: z.number().min(0).max(15),
+    founderMarketFit: z.number().min(0).max(10),
+    riskLevel: z.number().min(0).max(5),
+  }),
+  sources: z.array(ResearchSourceSchema),
+  researchMode: z.enum(["live", "hybrid", "fallback"]),
+  evidenceByDimension: z.record(z.string(), z.array(z.string())).default({}),
+  scoreCapReason: z.string().optional(),
 });
 
 export type EvidenceScore = z.infer<typeof EvidenceScoreSchema>;
+
+export type IdeaRevision = {
+  improvedIdea: string;
+  targetUser: string;
+  problem: string;
+  whyStronger: string;
+  whatChanged: string;
+  remainingRisk: string;
+};

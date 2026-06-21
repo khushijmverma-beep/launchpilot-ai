@@ -52,26 +52,17 @@ export function buildProjectDescription(
   return "Draft project — continue the interview to fill in details.";
 }
 
+const DRAFT_PLACEHOLDER = "Draft project — continue the interview to fill in details.";
+
 export function getProjectDisplayDescription(project: {
   description: string;
   collectedFields: Record<string, string | null>;
   transcript: TranscriptEntry[];
 }): string {
-  const fromInterview = buildProjectDescription(project.collectedFields, project.transcript);
-  const hasInterviewContext = Boolean(
-    project.collectedFields.rawIdea?.trim() ||
-      project.collectedFields.problem?.trim() ||
-      project.collectedFields.targetUser?.trim()
-  );
-
-  if (hasInterviewContext) {
-    return fromInterview;
-  }
-
   const stored = project.description.trim();
-  if (stored.endsWith("…")) {
-    return stored.slice(0, -1).trim();
+  if (stored && stored !== DRAFT_PLACEHOLDER && !stored.endsWith("…")) {
+    return stored;
   }
 
-  return stored || fromInterview;
+  return buildProjectDescription(project.collectedFields, project.transcript);
 }

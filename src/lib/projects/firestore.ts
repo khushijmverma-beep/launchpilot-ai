@@ -180,6 +180,19 @@ export function userOwnsProject(
   return project.userId === userId;
 }
 
+export async function updateProjectDescription(id: string, description: string): Promise<Project | null> {
+  const ref = doc(db, "projects", id);
+  const trimmed = description.trim();
+  if (!trimmed) return getProject(id);
+
+  await updateDoc(ref, {
+    description: trimmed,
+    updatedAt: Timestamp.now(),
+  });
+
+  return getProject(id);
+}
+
 export async function updateProjectName(id: string, name: string): Promise<Project | null> {
   const ref = doc(db, "projects", id);
   const trimmed = name.trim();

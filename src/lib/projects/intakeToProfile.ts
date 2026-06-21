@@ -25,6 +25,7 @@ export function intakeToProfile(intake: FounderIntake): FounderProfile {
     rawIdea: intake.rawIdea || "Exploring problem spaces",
     targetUser: intake.targetUser || "Early adopters",
     whyItMatters: intake.problem || "Needs validation with real users",
+    currentAlternatives: intake.alternatives || undefined,
     evidence: [intake.evidenceLevel],
     traction: intake.stage,
     willingnessToLearn: intake.openToModification ? "High" : "Moderate",

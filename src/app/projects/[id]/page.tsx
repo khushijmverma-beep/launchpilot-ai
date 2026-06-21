@@ -1,20 +1,30 @@
 "use client";
 
 import { ProjectCopilot } from "@/components/projects/ProjectCopilot";
-import { ContinueProjectLinks } from "@/components/projects/ContinueProjectLinks";
 import { Nav } from "@/components/Nav";
 import { AgentBreakdown } from "@/components/projects/AgentBreakdown";
 import { BlueprintStepper } from "@/components/projects/BlueprintStepper";
+import { ProjectDescriptionEditor } from "@/components/projects/ProjectDescriptionEditor";
 import { ProjectNameEditor } from "@/components/projects/ProjectNameEditor";
 import { ProjectStatsSummary } from "@/components/projects/ProjectStatsSummary";
+import { MarketNeedGrowthChart } from "@/components/projects/MarketNeedGrowthChart";
 import { StrengthsWeaknessesChart } from "@/components/projects/StrengthsWeaknessesChart";
 import { useAuth } from "@/contexts/AuthContext";
-import { getProject, updateProjectName, userOwnsProject } from "@/lib/projects/firestore";
+import { getProject, updateProjectDescription, updateProjectName, userOwnsProject } from "@/lib/projects/firestore";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getProjectDisplayDescription } from "@/lib/projects/description";
-import type { Project } from "@/lib/projects/types";
+import { EvidenceScoreCard } from "@/components/projects/EvidenceScoreCard";
+import type { EvidenceScore } from "@/lib/intake/schema";
+import type { Project, StoredEvidenceScore } from "@/lib/projects/types";
+
+function toEvidenceScore(stored: StoredEvidenceScore): EvidenceScore {
+  return {
+    ...stored,
+    sources: stored.sources ?? [],
+    evidenceByDimension: {},
+  };
+}
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -61,6 +71,12 @@ export default function ProjectDetailPage() {
     } catch (renameError) {
       setError(renameError instanceof Error ? renameError.message : "Failed to update name");
     }
+  }
+
+  async function handleDescriptionSave(description: string) {
+    if (!project) return;
+    const updated = await updateProjectDescription(project.id, description);
+    if (updated) setProject(updated);
   }
 
   if (!ready || authLoading) {
@@ -112,24 +128,25 @@ export default function ProjectDetailPage() {
       <Nav />
 
       <section className="mx-auto max-w-7xl px-5 py-8 pb-16">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,240px)]">
           <div className="min-w-0 space-y-10">
             <div>
               <Link href="/dashboard" className="font-mono text-xs text-lp-subtle hover:text-white">
                 ← Workspace
               </Link>
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <ProjectNameEditor name={project.name} onSave={handleRename} />
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-lp-muted">
-                    {getProjectDisplayDescription(project)}
-                  </p>
-                </div>
-                <ContinueProjectLinks projectId={project.id} />
+              <div className="mt-4">
+                <ProjectNameEditor name={project.name} onSave={handleRename} />
+                <ProjectDescriptionEditor project={project} onSave={handleDescriptionSave} />
               </div>
             </div>
 
             <section>
+              {project.stats?.evidenceScore && (
+                <div className="mb-10">
+                  <EvidenceScoreCard evidenceScore={toEvidenceScore(project.stats.evidenceScore)} />
+                </div>
+              )}
+
               <p className="mono-label mb-4">Stats summary</p>
               <ProjectStatsSummary
                 stats={project.stats}
@@ -145,6 +162,15 @@ export default function ProjectDetailPage() {
 
             <section>
               <StrengthsWeaknessesChart categories={project.strengthsWeaknesses} />
+            </section>
+
+            <section>
+              <MarketNeedGrowthChart
+                stats={project.stats}
+                projectId={project.id}
+                projectName={project.name}
+                collectedFields={project.collectedFields}
+              />
             </section>
 
             <section>

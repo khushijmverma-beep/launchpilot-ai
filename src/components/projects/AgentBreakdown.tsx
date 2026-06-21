@@ -6,12 +6,12 @@ type AgentBreakdownProps = {
 };
 
 const AGENT_ORDER: Array<{ key: keyof ProjectAgentOutputs; title: string }> = [
-  { key: "leadResearch", title: "Lead Research Agent" },
-  { key: "competitor", title: "Competitor Subagent" },
-  { key: "painPoint", title: "Pain Point Subagent" },
-  { key: "opportunity", title: "Opportunity Subagent" },
-  { key: "skillGap", title: "Skill Gap Subagent" },
-  { key: "sourceQuality", title: "Source Quality Agent" },
+  { key: "leadResearch", title: "Market Reality Agent" },
+  { key: "competitor", title: "Assumption & Risk Agent" },
+  { key: "painPoint", title: "MVP Scope Agent" },
+  { key: "skillGap", title: "Roadmap Agent" },
+  { key: "opportunity", title: "Opportunity Agent" },
+  { key: "sourceQuality", title: "Pitch & Communication Agent" },
 ];
 
 function AgentCard({ agent }: { agent: StoredAgentOutput }) {

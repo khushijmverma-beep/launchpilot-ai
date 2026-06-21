@@ -40,6 +40,13 @@ export function buildProjectCopilotContext(project: Project): string {
     sections.push(`Full interview transcript:\n${transcript}`);
   }
 
+  if (project.stats?.evidenceScore) {
+    const ev = project.stats.evidenceScore;
+    sections.push(
+      `Evidence score: ${ev.score}/100 (${ev.verdict}). Strongest: ${ev.strongestSignal}. Weakest: ${ev.weakestSignal}. Next: ${ev.nextValidationStep}`
+    );
+  }
+
   if (project.stats) {
     sections.push(
       `Analysis stats: confidence ${project.stats.confidenceScore}/100, ${project.stats.competitorsFound} competitors, ${project.stats.sourcesAnalyzed} sources, market estimate ${project.stats.marketSizeEstimate}`

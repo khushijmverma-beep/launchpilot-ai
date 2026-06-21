@@ -7,6 +7,7 @@ import { ChatTranscriptPanel } from "@/components/ChatTranscriptPanel";
 import { PublishProjectButton } from "@/components/projects/PublishProjectButton";
 import {
   getInterviewProgress,
+  isInterviewCompleteEnough,
   mergeCollectedFields,
   requestInterviewTurn,
   type CollectedFields,
@@ -59,15 +60,20 @@ function InterviewChatPageInner() {
             setMessages(project.transcript.map((entry) => ({ role: entry.role, content: entry.content })));
             setConversation(project.transcript);
             setCollectedFields(project.collectedFields);
+            if (isInterviewCompleteEnough(project.collectedFields)) {
+              interviewCompleteRef.current = true;
+              setInterviewComplete(true);
+            }
             return;
           }
         }
 
-        const turn = await requestInterviewTurn([]);
+        const prefill = await mergeWithInterviewPrefill({}, user?.uid);
+        const turn = await requestInterviewTurn([], { collectedFields: prefill });
         playClickSound();
         setMessages([{ role: "assistant", content: turn.message }]);
         setConversation([{ role: "assistant", content: turn.message }]);
-        setCollectedFields(await mergeWithInterviewPrefill(turn.collectedFields, user?.uid));
+        setCollectedFields(mergeCollectedFields(prefill, turn.collectedFields));
       } catch (error) {
         setMessages([
           {
@@ -116,7 +122,7 @@ function InterviewChatPageInner() {
       const postInterview = interviewCompleteRef.current;
       const turn = await requestInterviewTurn(nextConversation, {
         postInterview,
-        collectedFields: postInterview ? collectedFields : undefined,
+        collectedFields,
       });
       const mergedFields = mergeCollectedFields(collectedFields, turn.collectedFields);
       setCollectedFields(mergedFields);
@@ -129,7 +135,7 @@ function InterviewChatPageInner() {
         { role: "assistant", content: turn.message },
       ]);
 
-      if (turn.interviewComplete) {
+      if (turn.interviewComplete && isInterviewCompleteEnough(mergedFields)) {
         interviewCompleteRef.current = true;
         setInterviewComplete(true);
       }

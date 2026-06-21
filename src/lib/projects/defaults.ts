@@ -12,12 +12,12 @@ export function createEmptyAgentOutputs(): ProjectAgentOutputs {
   });
 
   return {
-    leadResearch: placeholder("Lead Research Agent"),
-    competitor: placeholder("Competitor Subagent"),
-    painPoint: placeholder("Pain Point Subagent"),
-    opportunity: placeholder("Opportunity Subagent"),
-    skillGap: placeholder("Skill Gap Subagent"),
-    sourceQuality: placeholder("Source Quality Agent"),
+    leadResearch: placeholder("Market Reality Agent"),
+    competitor: placeholder("Assumption & Risk Agent"),
+    painPoint: placeholder("MVP Scope Agent"),
+    opportunity: placeholder("Opportunity Agent"),
+    skillGap: placeholder("Roadmap Agent"),
+    sourceQuality: placeholder("Pitch & Communication Agent"),
   };
 }
 

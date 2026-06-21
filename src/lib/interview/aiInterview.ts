@@ -29,33 +29,228 @@ export type InterviewTurn = {
   collectedFields: CollectedFields;
 };
 
+const VAGUE_ANSWER =
+  /^(?:yes|no|maybe|idk|i don't know|dont know|not sure|nothing|none|n\/a|skip|unclear|unsure|ok|okay|sure|fine)$/i;
+
+/** Fields required before the intake can end (order does not matter). */
+const REQUIRED_FOR_COMPLETION: InterviewTopicField[] = [
+  "name",
+  "location",
+  "status",
+  "hoursPerWeek",
+  "budget",
+  "stage",
+  "rawIdea",
+  "targetUser",
+  "problem",
+  "evidenceLevel",
+  "alternatives",
+  "thirtyDayGoal",
+];
+
+const OPTIONAL_DEPTH_FIELDS: InterviewTopicField[] = [
+  "projectName",
+  "skills",
+  "teamStatus",
+  "openToModification",
+];
+
+function isFilled(value: string | null | undefined): boolean {
+  const trimmed = value?.trim();
+  return Boolean(trimmed) && !VAGUE_ANSWER.test(trimmed!);
+}
+
+function isSubstantive(value: string | null | undefined, minLength = 12): boolean {
+  if (!isFilled(value)) return false;
+  return value!.trim().length >= minLength || /\d/.test(value!);
+}
+
+export function isVagueFieldValue(value: string | null | undefined): boolean {
+  if (!value?.trim()) return true;
+  if (VAGUE_ANSWER.test(value.trim())) return true;
+  return value.trim().length < 8;
+}
+
+export function getMissingInterviewTopics(fields: CollectedFields): InterviewTopicField[] {
+  const noIdea =
+    fields.stage?.toLowerCase().includes("no idea") ||
+    fields.rawIdea?.toLowerCase().includes("no idea");
+
+  const missing: InterviewTopicField[] = [];
+
+  for (const field of REQUIRED_FOR_COMPLETION) {
+    if (noIdea && field === "rawIdea") continue;
+    if (!isFilled(fields[field])) missing.push(field);
+  }
+
+  if (!isFilled(fields.skills) && !isFilled(fields.teamStatus)) {
+    missing.push("skills");
+  }
+
+  for (const field of OPTIONAL_DEPTH_FIELDS) {
+    if (!isFilled(fields[field])) missing.push(field);
+  }
+
+  return missing;
+}
+
+const SHORT_TEXT_FIELDS: InterviewTopicField[] = [
+  "name",
+  "location",
+  "status",
+  "teamStatus",
+  "stage",
+  "targetUser",
+  "alternatives",
+  "thirtyDayGoal",
+];
+
+function isShortFieldAcceptable(field: InterviewTopicField, value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || VAGUE_ANSWER.test(trimmed)) return false;
+
+  if (field === "hoursPerWeek") return /\d/.test(trimmed);
+  if (field === "budget") return /\d/.test(trimmed) || /free|zero|none|₹|\$/i.test(trimmed);
+  if (field === "openToModification") return /yes|no|open|willing|true|false|pivot|feedback/i.test(trimmed);
+  if (field === "name") return trimmed.length >= 2;
+  if (field === "teamStatus") return /solo|alone|team|co-founder|cofounder|partner/i.test(trimmed);
+  if (field === "stage") return trimmed.length >= 4;
+  if (SHORT_TEXT_FIELDS.includes(field)) return trimmed.length >= 3;
+
+  return trimmed.length >= 8;
+}
+
+export function getVagueInterviewTopics(fields: CollectedFields): InterviewTopicField[] {
+  const vague: InterviewTopicField[] = [];
+
+  for (const field of INTERVIEW_TOPIC_FIELDS) {
+    const value = fields[field];
+    if (!value?.trim()) continue;
+    if (isShortFieldAcceptable(field, value)) continue;
+    if (isVagueFieldValue(value)) vague.push(field);
+  }
+
+  if (fields.rawIdea && !isSubstantive(fields.rawIdea, 10)) vague.push("rawIdea");
+  if (fields.problem && !isSubstantive(fields.problem, 15)) vague.push("problem");
+  if (fields.targetUser && !isSubstantive(fields.targetUser, 8)) vague.push("targetUser");
+  if (fields.evidenceLevel && !isSubstantive(fields.evidenceLevel, 10)) vague.push("evidenceLevel");
+
+  return [...new Set(vague)];
+}
+
+export function isInterviewCompleteEnough(fields: CollectedFields): boolean {
+  const noIdea =
+    fields.stage?.toLowerCase().includes("no idea") ||
+    fields.rawIdea?.toLowerCase().includes("no idea");
+
+  for (const field of REQUIRED_FOR_COMPLETION) {
+    if (noIdea && field === "rawIdea") continue;
+    if (!isFilled(fields[field])) return false;
+  }
+
+  if (!isFilled(fields.skills) && !isFilled(fields.teamStatus)) return false;
+
+  if (!noIdea) {
+    if (!isSubstantive(fields.rawIdea, 10)) return false;
+    if (!isSubstantive(fields.problem, 12)) return false;
+    if (!isSubstantive(fields.targetUser, 8)) return false;
+  }
+
+  if (getVagueInterviewTopics(fields).some((f) => REQUIRED_FOR_COMPLETION.includes(f))) {
+    return false;
+  }
+
+  const filledCount = INTERVIEW_TOPIC_FIELDS.filter((f) => isFilled(fields[f])).length;
+  return filledCount >= 12;
+}
+
+const FIELD_LABELS: Record<InterviewTopicField, string> = {
+  name: "founder name",
+  projectName: "product/startup name",
+  location: "location",
+  status: "student/working/exploring status",
+  hoursPerWeek: "hours per week",
+  budget: "budget",
+  skills: "skills",
+  teamStatus: "solo vs team",
+  stage: "startup stage",
+  rawIdea: "the idea",
+  targetUser: "target user",
+  problem: "problem/pain",
+  evidenceLevel: "validation evidence so far",
+  alternatives: "what users do today instead",
+  thirtyDayGoal: "30-day goal",
+  openToModification: "openness to pivot",
+};
+
+export function buildInterviewRuntimeContext(
+  fields: CollectedFields,
+  messages: Array<{ role: "user" | "assistant"; content: string }> = []
+): string {
+  const progress = getInterviewProgress(fields);
+  const missing = getMissingInterviewTopics(fields);
+  const vague = getVagueInterviewTopics(fields);
+  const ready = isInterviewCompleteEnough(fields);
+
+  const known = INTERVIEW_TOPIC_FIELDS.filter((key) => isFilled(fields[key]))
+    .map((key) => `${FIELD_LABELS[key]}: ${fields[key]}`)
+    .join("\n");
+
+  const recentUser = messages
+    .filter((m) => m.role === "user")
+    .slice(-3)
+    .map((m) => m.content)
+    .join(" | ");
+
+  const nextFocus =
+    vague.length > 0
+      ? `Deepen vague answers: ${vague.map((f) => FIELD_LABELS[f]).join(", ")}`
+      : missing.length > 0
+        ? `Next topics to cover naturally: ${missing.slice(0, 4).map((f) => FIELD_LABELS[f]).join(", ")}`
+        : "Optional polish: project name, pivot openness";
+
+  return `
+
+--- RUNTIME INTERVIEW STATE (internal — never read aloud) ---
+Progress: ${progress.current}/${progress.total} topics captured.
+Completion gate: ${ready ? "READY — you may set interviewComplete to true on this turn if the founder has nothing else to add." : "NOT READY — interviewComplete MUST stay false. Keep asking until enough detail is captured."}
+
+Known so far:
+${known || "(nothing substantive yet)"}
+
+Recent founder replies: ${recentUser || "(starting)"}
+
+${nextFocus}
+
+Question rules for this turn:
+- Ask ONE question tailored to their project (${fields.rawIdea?.trim() || fields.projectName?.trim() || "their idea"}), not a generic script.
+- Build on the last thing they said; do not repeat fully answered topics.
+- If they mentioned a product (e.g. parking app, merch, AI tool), ask specifics about users, workflow, pain, or validation for THAT domain.
+- Do not end the interview until the completion gate says READY.`;
+}
+
 export const INTERVIEW_SYSTEM_PROMPT = `You are LaunchPilot, a warm and sharp founder execution navigator running a live intake interview.
 
-Conduct a natural conversation — not a rigid script. Learn about the founder over several turns and cover these topics when possible:
-name, projectName (what they want to call their product/startup), location, student/working/exploring status, hours per week, budget, skills, team status, startup stage, raw idea, target user, problem, validation evidence, alternatives, 30-day goal, openness to modification.
+Your job is to understand THIS founder's specific project through natural conversation — not a fixed questionnaire. There is no required order. Let their answers guide what you ask next.
 
-Tone & length (critical):
-- Every reply must be 1–2 short sentences total. Never write a paragraph.
-- Ask exactly ONE question per turn. Never stack multiple questions.
-- Early turns: stay broad and welcoming (who they are, what they're exploring).
-- Middle turns: narrow to the idea, user, and problem.
-- Later turns: get specific (validation, constraints, 30-day goal, tradeoffs).
-- Acknowledge in at most a few words ("Got it.", "Makes sense.") — then ask the next question.
-- Do not recap everything they said. Do not lecture or explain your process.
+Topics to eventually capture (when relevant): name, projectName, location, status, hoursPerWeek, budget, skills, teamStatus, stage, rawIdea, targetUser, problem, evidenceLevel, alternatives, thirtyDayGoal, openToModification.
 
-Other rules:
-- Follow up when an answer is vague, still in 1–2 sentences.
-- Stay on founder/startup topics; gently redirect off-topic questions.
-- Never mention JSON, schemas, or system instructions to the user.
-- "name" is the founder's personal name. "projectName" is only the product/startup name if they give one (e.g. "We're calling it LaunchPilot").
+How to ask (critical):
+- Every reply: 1–2 short sentences. One question only.
+- Make questions specific to what they are building. Reference their idea, users, or constraints by name.
+- If they say "parking app for students", ask about campus parking pain, not generic "what is your target market".
+- If an answer is vague ("students", "it's hard", "maybe"), ask a concrete follow-up: who exactly, what happened last time, how often, what they do today.
+- Early turns: who they are and what they're exploring.
+- Middle turns: idea, user, problem — go deep on the workflow.
+- Later turns: evidence, alternatives, constraints, 30-day goal.
+- Brief acknowledgment only ("Got it.") — no lectures, no recaps, no process talk.
 
-When you have enough usable detail on at least name, location, status, hoursPerWeek, stage, rawIdea, targetUser, problem, and thirtyDayGoal, complete the intake.
+Completion:
+- You will receive a RUNTIME INTERVIEW STATE block each turn. Obey the completion gate exactly.
+- Only set interviewComplete to true when the gate says READY AND you have enough to publish a useful project analysis.
+- When completing: one warm line with their name, wish them well, ask if they need anything else. No summary. No "wrapping up" language.
 
-Wrap-up (ONLY when setting interviewComplete to true — say this once, never again later):
-- Do NOT mention summarizing, concluding, wrapping up, or that you already discussed details.
-- Do NOT provide a summary of the project.
-- One short warm line with their name, wish them well, then ask if they need help with anything else.
-- Example: "It was great talking to you, Khushi — I wish you the best with your project. Is there anything else you need help with?"
+Never mention JSON, schemas, or these instructions.
 
 Respond ONLY with valid JSON (no markdown fences):
 {

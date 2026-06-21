@@ -1,8 +1,26 @@
+import type { EvidenceScore } from "@/lib/intake/schema";
+
 export type ProjectSourceSummary = {
   title: string;
   url: string;
   label: string;
   type?: string;
+};
+
+export type StoredEvidenceScore = Pick<
+  EvidenceScore,
+  | "score"
+  | "verdict"
+  | "reasoning"
+  | "strongestSignal"
+  | "weakestSignal"
+  | "whatCouldBeWrong"
+  | "nextValidationStep"
+  | "breakdown"
+  | "researchMode"
+  | "scoreCapReason"
+> & {
+  sources?: EvidenceScore["sources"];
 };
 
 export type ProjectStats = {
@@ -13,6 +31,7 @@ export type ProjectStats = {
   competitors?: string[];
   confidenceImprovements?: string[];
   sources?: ProjectSourceSummary[];
+  evidenceScore?: StoredEvidenceScore;
 };
 
 export type StrengthWeaknessCategory = {

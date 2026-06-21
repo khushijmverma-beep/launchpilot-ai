@@ -46,13 +46,6 @@ export function PublishProjectButton({
 
     try {
       const existing = projectId ? await getProject(projectId) : null;
-      let score = evidenceScore ?? undefined;
-
-      if (!score && shouldRunResearchEvaluation(collectedFields, transcript, existing)) {
-        const intake = buildIntakeFromFields(collectedFields, transcript);
-        score = await runResearchEvaluation(intake);
-      }
-
       const nameResponse = await fetch("/api/projects/suggest-name", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,6 +63,8 @@ export function PublishProjectButton({
       const { name: resolvedName } = (await nameResponse.json()) as { name: string };
 
       let researchedBrief: LaunchBrief | undefined;
+      let score: EvidenceScore | undefined = evidenceScore ?? undefined;
+
       if (shouldRunResearchEvaluation(collectedFields, transcript, existing)) {
         const analyzeResponse = await fetch("/api/projects/analyze", {
           method: "POST",
@@ -81,8 +76,15 @@ export function PublishProjectButton({
           throw new Error(await analyzeResponse.text());
         }
 
-        const analyzeData = (await analyzeResponse.json()) as { brief: LaunchBrief };
+        const analyzeData = (await analyzeResponse.json()) as {
+          brief: LaunchBrief;
+          evidenceScore?: EvidenceScore;
+        };
         researchedBrief = analyzeData.brief;
+        score = analyzeData.evidenceScore ?? analyzeData.brief.evidenceScore;
+      } else if (!score) {
+        const intake = buildIntakeFromFields(collectedFields, transcript);
+        score = await runResearchEvaluation(intake);
       }
 
       const payload = buildProjectFromInterview(

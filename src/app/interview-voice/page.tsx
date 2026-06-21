@@ -8,6 +8,7 @@ import { EvidenceScoreCard } from "@/components/EvidenceScoreCard";
 import {
   buildIntakeFromFields,
   getInterviewProgress,
+  isInterviewCompleteEnough,
   mergeCollectedFields,
   requestInterviewTurn,
   type CollectedFields,
@@ -71,6 +72,9 @@ function InterviewVoicePageInner() {
       collectedFieldsRef.current = project.collectedFields;
       setMessages(transcript);
       setCollectedFields(project.collectedFields);
+      if (isInterviewCompleteEnough(project.collectedFields)) {
+        interviewCompleteRef.current = true;
+      }
     }
 
     void loadProject();
@@ -216,7 +220,7 @@ function InterviewVoicePageInner() {
     try {
       const turn = await requestInterviewTurn(nextConversation, {
         postInterview: interviewCompleteRef.current,
-        collectedFields: interviewCompleteRef.current ? collectedFieldsRef.current : undefined,
+        collectedFields: collectedFieldsRef.current,
       });
       if (sessionAbortedRef.current) return;
 
@@ -232,7 +236,7 @@ function InterviewVoicePageInner() {
       }
       if (sessionAbortedRef.current) return;
 
-      if (turn.interviewComplete) {
+      if (turn.interviewComplete && isInterviewCompleteEnough(mergedFields)) {
         interviewCompleteRef.current = true;
         setOrbState("listening");
         setStatusText("Interview complete — ask me anything else you need.");
@@ -289,7 +293,8 @@ function InterviewVoicePageInner() {
       setOrbState("thinking");
       setStatusText("Connecting to LaunchPilot...");
 
-      const turn = await requestInterviewTurn([]);
+      const prefill = collectedFieldsRef.current;
+      const turn = await requestInterviewTurn([], { collectedFields: prefill });
       const mergedFields = mergeCollectedFields(collectedFieldsRef.current, turn.collectedFields);
       collectedFieldsRef.current = mergedFields;
       setCollectedFields(mergedFields);

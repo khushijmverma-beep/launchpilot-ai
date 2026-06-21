@@ -10,13 +10,23 @@ const CATEGORY_IMPROVEMENTS: Record<string, string> = {
 };
 
 export function parseCompetitorsFromFinding(finding: string): string[] {
-  const match = finding.match(/alternatives found:\s*(.+?)\.?$/i);
-  if (!match?.[1]) return [];
+  const marketMatch = finding.match(/alternatives (?:include|found|retained were):\s*(.+?)(?:\.|$)/i);
+  if (marketMatch?.[1]) {
+    return marketMatch[1]
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
 
-  return match[1]
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const legacyMatch = finding.match(/alternatives found:\s*(.+?)\.?$/i);
+  if (legacyMatch?.[1]) {
+    return legacyMatch[1]
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 export function deriveConfidenceImprovements(

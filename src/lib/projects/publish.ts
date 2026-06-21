@@ -28,11 +28,31 @@ function resolveName(
   return existing?.name ?? UNTITLED_PROJECT_NAME;
 }
 
+const DRAFT_PLACEHOLDER = "Draft project — continue the interview to fill in details.";
+
 function suggestDescription(
   fields: Record<string, string | null>,
   transcript: TranscriptEntry[]
 ): string {
   return buildProjectDescription(fields, transcript);
+}
+
+function resolveDescription(
+  fields: Record<string, string | null>,
+  transcript: TranscriptEntry[],
+  existing?: Project | null
+): string {
+  const auto = suggestDescription(fields, transcript);
+  const stored = existing?.description?.trim();
+
+  if (stored && stored !== DRAFT_PLACEHOLDER && !stored.endsWith("…")) {
+    const autoFromExisting = suggestDescription(existing!.collectedFields, existing!.transcript);
+    if (stored !== autoFromExisting) {
+      return stored;
+    }
+  }
+
+  return auto;
 }
 
 function buildBlueprint(brief: ReturnType<typeof generateLaunchBrief>): string[] {
@@ -91,13 +111,30 @@ function buildFullProjectFromBrief(
   existing?: Project | null,
   resolvedName?: string
 ): Omit<Project, "id" | "createdAt" | "updatedAt"> {
-  const confidence = evidenceScore?.score ?? brief.founderScore.overall;
+  const resolvedEvidence = brief.evidenceScore ?? (evidenceScore ? { score: evidenceScore.score } : undefined);
+  const confidence = resolvedEvidence?.score ?? brief.founderScore.overall;
   const strengthsWeaknesses = deriveStrengthsWeaknesses(brief, brief.agents, confidence);
   const agentOutputs = buildAgentOutputs(brief.agents);
 
+  const storedEvidence = brief.evidenceScore
+    ? {
+        score: brief.evidenceScore.score,
+        verdict: brief.evidenceScore.verdict,
+        reasoning: brief.evidenceScore.reasoning,
+        strongestSignal: brief.evidenceScore.strongestSignal,
+        weakestSignal: brief.evidenceScore.weakestSignal,
+        whatCouldBeWrong: brief.evidenceScore.whatCouldBeWrong,
+        nextValidationStep: brief.evidenceScore.nextValidationStep,
+        breakdown: brief.evidenceScore.breakdown,
+        researchMode: brief.evidenceScore.researchMode,
+        scoreCapReason: brief.evidenceScore.scoreCapReason,
+        sources: brief.evidenceScore.sources.slice(0, 8),
+      }
+    : undefined;
+
   return {
     name: resolveName(fields, transcript, existing, resolvedName),
-    description: suggestDescription(fields, transcript),
+    description: resolveDescription(fields, transcript, existing),
     blueprint: buildBlueprint(brief),
     stats: {
       sourcesAnalyzed: brief.sources.length,
@@ -112,6 +149,7 @@ function buildFullProjectFromBrief(
         label: source.label,
         type: source.type,
       })),
+      evidenceScore: storedEvidence,
     },
     strengthsWeaknesses,
     agentOutputs,

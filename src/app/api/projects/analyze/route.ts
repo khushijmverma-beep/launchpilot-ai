@@ -14,9 +14,9 @@ export async function POST(request: Request) {
 
     const intake = buildIntakeFromFields(collectedFields, transcript);
     const profile = intakeToProfile(intake);
-    const brief = await generateResearchedBrief(profile);
+    const brief = await generateResearchedBrief(profile, intake);
 
-    return NextResponse.json({ brief });
+    return NextResponse.json({ brief, evidenceScore: brief.evidenceScore });
   } catch (error) {
     console.error("Project analyze failed:", error);
     return NextResponse.json(
