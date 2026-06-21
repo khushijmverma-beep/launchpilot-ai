@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { buildIntakeFromFields, type CollectedFields } from "@/lib/interview/aiInterview";
 import { runResearchEvaluation } from "@/lib/research/researchAgent";
 import type { EvidenceScore } from "@/lib/intake/schema";
+import type { LaunchBrief } from "@/lib/types";
 import type { TranscriptEntry } from "@/lib/projects/types";
 
 type PublishProjectButtonProps = {
@@ -68,6 +69,22 @@ export function PublishProjectButton({
 
       const { name: resolvedName } = (await nameResponse.json()) as { name: string };
 
+      let researchedBrief: LaunchBrief | undefined;
+      if (shouldRunResearchEvaluation(collectedFields, transcript, existing)) {
+        const analyzeResponse = await fetch("/api/projects/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ collectedFields, transcript }),
+        });
+
+        if (!analyzeResponse.ok) {
+          throw new Error(await analyzeResponse.text());
+        }
+
+        const analyzeData = (await analyzeResponse.json()) as { brief: LaunchBrief };
+        researchedBrief = analyzeData.brief;
+      }
+
       const payload = buildProjectFromInterview(
         {
           collectedFields,
@@ -76,7 +93,8 @@ export function PublishProjectButton({
           projectId,
           resolvedName,
         },
-        existing
+        existing,
+        researchedBrief
       );
 
       const userId = user?.uid;
@@ -98,7 +116,7 @@ export function PublishProjectButton({
   return (
     <div className="space-y-2">
       <button type="button" className={className} onClick={handlePublish} disabled={disabled || loading}>
-        {loading ? "Publishing…" : label}
+        {loading ? "Running research…" : label}
       </button>
       {error && <p className="font-mono text-xs text-red-400">{error}</p>}
     </div>

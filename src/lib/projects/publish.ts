@@ -1,4 +1,5 @@
 import { generateLaunchBrief } from "@/lib/agents";
+import type { LaunchBrief } from "@/lib/types";
 import { buildIntakeFromFields, type CollectedFields } from "@/lib/interview/aiInterview";
 import { createEmptyAgentOutputs, isUntitledName, UNTITLED_PROJECT_NAME } from "./defaults";
 import { intakeToProfile } from "./intakeToProfile";
@@ -10,6 +11,7 @@ import {
   mergeTranscripts,
 } from "./merge";
 import type { Project, PublishProjectInput, TranscriptEntry } from "./types";
+import { buildProjectDescription } from "./description";
 
 function resolveName(
   fields: Record<string, string | null>,
@@ -26,8 +28,11 @@ function resolveName(
   return existing?.name ?? UNTITLED_PROJECT_NAME;
 }
 
-function suggestDescription(brief: ReturnType<typeof generateLaunchBrief>): string {
-  return brief.refinedIdea.length > 120 ? `${brief.refinedIdea.slice(0, 117)}…` : brief.refinedIdea;
+function suggestDescription(
+  fields: Record<string, string | null>,
+  transcript: TranscriptEntry[]
+): string {
+  return buildProjectDescription(fields, transcript);
 }
 
 function buildBlueprint(brief: ReturnType<typeof generateLaunchBrief>): string[] {
@@ -78,6 +83,43 @@ function buildDraftProject(
   };
 }
 
+function buildFullProjectFromBrief(
+  fields: Record<string, string | null>,
+  transcript: TranscriptEntry[],
+  brief: LaunchBrief,
+  evidenceScore: { score: number } | undefined,
+  existing?: Project | null,
+  resolvedName?: string
+): Omit<Project, "id" | "createdAt" | "updatedAt"> {
+  const confidence = evidenceScore?.score ?? brief.founderScore.overall;
+  const strengthsWeaknesses = deriveStrengthsWeaknesses(brief, brief.agents, confidence);
+  const agentOutputs = buildAgentOutputs(brief.agents);
+
+  return {
+    name: resolveName(fields, transcript, existing, resolvedName),
+    description: suggestDescription(fields, transcript),
+    blueprint: buildBlueprint(brief),
+    stats: {
+      sourcesAnalyzed: brief.sources.length,
+      confidenceScore: confidence,
+      competitorsFound: brief.competitors.length,
+      marketSizeEstimate: estimateTam(confidence),
+      competitors: brief.competitors,
+      confidenceImprovements: deriveConfidenceImprovements(strengthsWeaknesses, agentOutputs, confidence),
+      sources: brief.sources.map((source) => ({
+        title: source.title,
+        url: source.url,
+        label: source.label,
+        type: source.type,
+      })),
+    },
+    strengthsWeaknesses,
+    agentOutputs,
+    transcript,
+    collectedFields: fields,
+  };
+}
+
 function buildFullProject(
   fields: Record<string, string | null>,
   transcript: TranscriptEntry[],
@@ -88,38 +130,30 @@ function buildFullProject(
   const intake = buildIntakeFromFields(fields as CollectedFields, transcript);
   const profile = intakeToProfile(intake);
   const brief = generateLaunchBrief(profile);
-  const confidence = evidenceScore?.score ?? brief.founderScore.overall;
-  const strengthsWeaknesses = deriveStrengthsWeaknesses(brief, brief.agents, confidence);
-  const agentOutputs = buildAgentOutputs(brief.agents);
-
-  return {
-    name: resolveName(fields, transcript, existing, resolvedName),
-    description: suggestDescription(brief),
-    blueprint: buildBlueprint(brief),
-    stats: {
-      sourcesAnalyzed: brief.sources.length,
-      confidenceScore: confidence,
-      competitorsFound: brief.competitors.length,
-      marketSizeEstimate: estimateTam(confidence),
-      competitors: brief.competitors,
-      confidenceImprovements: deriveConfidenceImprovements(strengthsWeaknesses, agentOutputs, confidence),
-    },
-    strengthsWeaknesses,
-    agentOutputs,
-    transcript,
-    collectedFields: fields,
-  };
+  return buildFullProjectFromBrief(fields, transcript, brief, evidenceScore, existing, resolvedName);
 }
 
 export function buildProjectFromInterview(
   input: PublishProjectInput,
-  existing?: Project | null
+  existing?: Project | null,
+  brief?: LaunchBrief
 ): Omit<Project, "id" | "createdAt" | "updatedAt"> {
   const mergedFields = mergeCollectedFields(existing?.collectedFields ?? {}, input.collectedFields);
   const mergedTranscript = mergeTranscripts(existing?.transcript ?? [], input.transcript);
 
   if (!hasEnoughDataForFullPipeline(mergedFields, mergedTranscript)) {
     return buildDraftProject(mergedFields, mergedTranscript, existing, input.resolvedName);
+  }
+
+  if (brief) {
+    return buildFullProjectFromBrief(
+      mergedFields,
+      mergedTranscript,
+      brief,
+      input.evidenceScore,
+      existing,
+      input.resolvedName
+    );
   }
 
   return buildFullProject(mergedFields, mergedTranscript, input.evidenceScore, existing, input.resolvedName);

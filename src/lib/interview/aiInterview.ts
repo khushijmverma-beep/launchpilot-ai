@@ -209,23 +209,22 @@ export function getInterviewProgress(collectedFields: CollectedFields): {
   total: number;
   percentage: number;
 } {
-  const required: InterviewTopicField[] = [
-    "name",
-    "location",
-    "status",
-    "hoursPerWeek",
-    "stage",
-    "rawIdea",
-    "targetUser",
-    "problem",
-    "thirtyDayGoal",
-  ];
-  const current = required.filter((field) => Boolean(collectedFields[field]?.trim())).length;
-  const total = required.length;
+  const current = INTERVIEW_TOPIC_FIELDS.filter((field) =>
+    Boolean(collectedFields[field]?.trim())
+  ).length;
+
+  const depthScore =
+    current +
+    (collectedFields.rawIdea?.trim() ? 1 : 0) +
+    (collectedFields.problem?.trim() ? 1 : 0) +
+    (collectedFields.evidenceLevel?.trim() ? 1 : 0);
+
+  const total = Math.min(15, Math.max(10, 10 + Math.floor(depthScore / 3)));
+
   return {
     current,
     total,
-    percentage: Math.round((current / total) * 100),
+    percentage: Math.min(100, Math.round((current / total) * 100)),
   };
 }
 

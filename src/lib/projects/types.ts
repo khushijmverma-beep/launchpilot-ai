@@ -1,3 +1,10 @@
+export type ProjectSourceSummary = {
+  title: string;
+  url: string;
+  label: string;
+  type?: string;
+};
+
 export type ProjectStats = {
   sourcesAnalyzed: number;
   confidenceScore: number;
@@ -5,6 +12,7 @@ export type ProjectStats = {
   marketSizeEstimate: string;
   competitors?: string[];
   confidenceImprovements?: string[];
+  sources?: ProjectSourceSummary[];
 };
 
 export type StrengthWeaknessCategory = {
